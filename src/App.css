@@ -9,6 +9,10 @@
   overflow: hidden;
 }
 
+.app-shell-minimalist {
+  gap: 0.5rem;
+}
+
 .app-header {
   display: flex;
   flex-direction: column;
@@ -164,6 +168,10 @@
   gap: 1rem;
   min-height: 0;
   align-items: stretch;
+}
+
+.layout-minimalist {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .terminal-column {

@@ -182,6 +182,9 @@ type ClientSettings = {
     customHost: string
     customPort: number
   }
+  layout: {
+    minimalistMode: boolean
+  }
   terminal: {
     fontSize: number
     lineHeight: number
@@ -216,6 +219,9 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     customHost: DEFAULT_HOST,
     customPort: DEFAULT_PORT,
   },
+  layout: {
+    minimalistMode: false,
+  },
   terminal: {
     fontSize: 14,
     lineHeight: 1.55,
@@ -236,7 +242,7 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   msdp: normalizeMsdpVariableMap(defaultMsdpVariables),
 }
 
-const OUTPUT_FONT_SIZE_OPTIONS = [12, 13, 14, 15, 16, 18, 20, 22, 24]
+const OUTPUT_FONT_SIZE_OPTIONS = [8, 9, 10, 11, 12, 13, 14, 15, 16, 18, 20, 22, 24]
 const OUTPUT_LINE_HEIGHT_OPTIONS = [
   { value: 1.35, label: 'Compact' },
   { value: 1.55, label: 'Normal' },
@@ -772,6 +778,10 @@ function App() {
     () => uiSettings.connection.muds.find((mud) => mud.id === selectedMudId),
     [selectedMudId, uiSettings.connection.muds],
   )
+  const isMinimalistMode = clientSettings.layout.minimalistMode
+  const showMinimalistConnectionBar = isMinimalistMode && !connected
+  const showHeader = showMinimalistConnectionBar || (!isMinimalistMode && isHeaderVisible)
+  const showBranding = !isMinimalistMode && isHeaderVisible
   const abilityScores = useMemo(
     () => [
       { label: 'STR', value: mudState.strength },
@@ -1174,6 +1184,17 @@ function App() {
     setAutomationNotice(null)
   }
 
+  function updateLayoutSettings(updates: Partial<ClientSettings['layout']>) {
+    setClientSettings((current) => ({
+      ...current,
+      layout: {
+        ...current.layout,
+        ...updates,
+      },
+    }))
+    setAutomationNotice(null)
+  }
+
   function updateMsdpVariable(key: MsdpVariableKey, nextValue: string) {
     setClientSettings((current) => ({
       ...current,
@@ -1241,10 +1262,10 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isMinimalistMode ? ' app-shell-minimalist' : ''}`}>
       <div ref={menuBarRef} className="window-menu-bar panel" data-prevent-command-focus>
         <div className="window-menu-links" role="menubar" aria-label="Window menu">
-          {connected ? (
+          {connected && !isMinimalistMode ? (
             <button type="button" className="window-menu-link" onClick={() => setIsHeaderVisible((current) => !current)}>
               {isHeaderVisible ? 'Hide Header' : 'Show Header'}
             </button>
@@ -1664,6 +1685,24 @@ function App() {
 
                     <section className="settings-group">
                       <div className="settings-group-header">
+                        <h4>Screen layout</h4>
+                        <p>Hide the header, sidebar panels, and gauges so small screens can focus on the main output.</p>
+                      </div>
+
+                      <div className="settings-toggle-list">
+                        <label className="automation-toggle">
+                          <input
+                            type="checkbox"
+                            checked={clientSettings.layout.minimalistMode}
+                            onChange={(event) => updateLayoutSettings({ minimalistMode: event.target.checked })}
+                          />
+                          <span>Minimalist mode</span>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="settings-group">
+                      <div className="settings-group-header">
                         <h4>Output window</h4>
                         <p>Fine-tune readability and scrolling in the main MUD output pane.</p>
                       </div>
@@ -1868,14 +1907,16 @@ function App() {
         />
       </div>
 
-      {isHeaderVisible ? (
+      {showHeader ? (
         <div className="app-header" data-prevent-command-focus>
           <header className="topbar">
-            <div>
-              <p className="eyebrow">{uiSettings.personalization.eyebrow}</p>
-              <h1>{uiSettings.personalization.title}</h1>
-              <p className="subtitle">{uiSettings.personalization.subtitle}</p>
-            </div>
+            {showBranding ? (
+              <div>
+                <p className="eyebrow">{uiSettings.personalization.eyebrow}</p>
+                <h1>{uiSettings.personalization.title}</h1>
+                <p className="subtitle">{uiSettings.personalization.subtitle}</p>
+              </div>
+            ) : null}
 
             <form className="connection-form panel" onSubmit={handleConnectionSubmit}>
               {uiSettings.connection.muds.length > 0 ? (
@@ -1922,7 +1963,7 @@ function App() {
         </div>
       ) : null}
 
-      <main className="layout">
+      <main className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}`}>
         <section className="terminal-column panel">
           <div
             ref={terminalRef}
@@ -1933,11 +1974,13 @@ function App() {
             dangerouslySetInnerHTML={{ __html: terminalOutputHtml }}
           />
 
-          <div className="bars">
-            {bars.map((bar) => (
-              <StatusBar key={bar.id} bar={bar} />
-            ))}
-          </div>
+          {isMinimalistMode ? null : (
+            <div className="bars">
+              {bars.map((bar) => (
+                <StatusBar key={bar.id} bar={bar} />
+              ))}
+            </div>
+          )}
 
           <form className="command-form" onSubmit={handleCommandSubmit}>
             <input
@@ -1958,158 +2001,159 @@ function App() {
           </form>
         </section>
 
-        <aside className="sidebar">
-          <section className="panel map-panel">
-            <div className="panel-header">
-              <div>
-                <h2>Map</h2>
+        {isMinimalistMode ? null : (
+          <aside className="sidebar">
+            <section className="panel map-panel">
+              <div className="panel-header">
+                <div>
+                  <h2>Map</h2>
+                </div>
               </div>
-            </div>
 
-            <div className="map-tab-strip" role="tablist" aria-label="Map views">
-              {MAP_PANEL_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeMapTab === tab.id}
-                  className={`map-tab-button${activeMapTab === tab.id ? ' map-tab-button-active' : ''}`}
-                  onClick={() => setActiveMapTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+              <div className="map-tab-strip" role="tablist" aria-label="Map views">
+                {MAP_PANEL_TABS.map((tab) => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={activeMapTab === tab.id}
+                    className={`map-tab-button${activeMapTab === tab.id ? ' map-tab-button-active' : ''}`}
+                    onClick={() => setActiveMapTab(tab.id)}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-            <div className="map-tab-panel" role="tabpanel" aria-label={activeMapPanel.panelLabel}>
-              {activeMapTab === 'graphic' ? (
-                graphicMap ? (
-                  <div className="minimap minimap-graphic" style={minimapStyle}>
-                    <div
-                      className="graphic-map"
-                      style={{
-                        gridTemplateColumns: `repeat(${graphicMap.width}, minmax(0, 1fr))`,
-                        gridTemplateRows: `repeat(${graphicMap.height}, minmax(0, 1fr))`,
-                        aspectRatio: `${graphicMap.width} / ${graphicMap.height}`,
-                        width: '100%',
-                        maxWidth: `${clientSettings.minimap.paneHeight}rem`,
-                        maxHeight: `${clientSettings.minimap.paneHeight}rem`,
-                      }}
-                    >
-                      {graphicMap.cells.map((cell) => (
-                        <div
-                          key={cell.key}
-                          className={[
-                            'graphic-map-cell',
-                            cell.kind === 'room'
-                              ? `graphic-map-tile${cell.isCurrent ? ' graphic-map-tile-current' : ''}`
-                              : cell.kind === 'connector'
-                                ? `graphic-map-connector graphic-map-connector-${cell.orientation}`
-                                : 'graphic-map-empty',
-                          ].join(' ')}
-                          style={cell.color ? { color: cell.color, background: cell.kind === 'room' ? cell.color : undefined } : undefined}
-                          title={cell.title}
-                        >
-                          {cell.kind === 'room' && cell.markers.length > 0 ? (
-                            <div className="graphic-map-markers" aria-hidden="true">
-                              {cell.markers.map((marker) => (
-                                <span
-                                  key={marker.id}
-                                  className={marker.className ? `graphic-map-marker ${marker.className}` : 'graphic-map-marker'}
-                                  title={marker.label}
-                                >
-                                  {marker.icon}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="minimap" style={minimapStyle}>
-                    Waiting for GRAPHIC_MAP MSDP data.
-                  </div>
-                )
-              ) : activeMapTab === 'graphicLegend' ? (
-                <div className="map-legend-pane" style={minimapStyle}>
-                  <section className="map-legend-section">
-                    <p className="map-legend-note">
-                      Sector names cross-reference Krynn&apos;s ASCII map tables; swatches match this client&apos;s graphic-map colors.
-                    </p>
-                    <div className="map-legend-grid">
-                      {GRAPHIC_MAP_LEGEND_ITEMS.map((item) => (
-                        <div key={item.id} className="map-legend-item">
-                          <span
-                            className="map-legend-swatch"
-                            style={{ background: getGraphicMapSectorColor(item.sector ?? 0, false) }}
-                            aria-hidden="true"
-                          />
-                          <div className="map-legend-copy">
-                            <strong>{item.label}</strong>
-                            <span>{item.detail}</span>
-                            {item.sample ? (
-                              <span
-                                className="map-legend-sample"
-                                dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample) }}
-                              />
+              <div className="map-tab-panel" role="tabpanel" aria-label={activeMapPanel.panelLabel}>
+                {activeMapTab === 'graphic' ? (
+                  graphicMap ? (
+                    <div className="minimap minimap-graphic" style={minimapStyle}>
+                      <div
+                        className="graphic-map"
+                        style={{
+                          gridTemplateColumns: `repeat(${graphicMap.width}, minmax(0, 1fr))`,
+                          gridTemplateRows: `repeat(${graphicMap.height}, minmax(0, 1fr))`,
+                          aspectRatio: `${graphicMap.width} / ${graphicMap.height}`,
+                          width: '100%',
+                          maxWidth: `${clientSettings.minimap.paneHeight}rem`,
+                          maxHeight: `${clientSettings.minimap.paneHeight}rem`,
+                        }}
+                      >
+                        {graphicMap.cells.map((cell) => (
+                          <div
+                            key={cell.key}
+                            className={[
+                              'graphic-map-cell',
+                              cell.kind === 'room'
+                                ? `graphic-map-tile${cell.isCurrent ? ' graphic-map-tile-current' : ''}`
+                                : cell.kind === 'connector'
+                                  ? `graphic-map-connector graphic-map-connector-${cell.orientation}`
+                                  : 'graphic-map-empty',
+                            ].join(' ')}
+                            style={cell.color ? { color: cell.color, background: cell.kind === 'room' ? cell.color : undefined } : undefined}
+                            title={cell.title}
+                          >
+                            {cell.kind === 'room' && cell.markers.length > 0 ? (
+                              <div className="graphic-map-markers" aria-hidden="true">
+                                {cell.markers.map((marker) => (
+                                  <span
+                                    key={marker.id}
+                                    className={marker.className ? `graphic-map-marker ${marker.className}` : 'graphic-map-marker'}
+                                    title={marker.label}
+                                  >
+                                    {marker.icon}
+                                  </span>
+                                ))}
+                              </div>
                             ) : null}
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </section>
-
-                  <section className="map-legend-section">
-                    <h3>Special exits</h3>
-                    <p className="map-legend-note">
-                      `GRAPHIC_MAP.sp` markers from Krynn&apos;s `build_graphic_map_specials()` output.
-                    </p>
-                    <div className="map-legend-grid map-legend-grid-compact">
-                      {GRAPHIC_MAP_SPECIAL_LEGEND_ITEMS.map((item) => (
-                        <div key={item.id} className="map-legend-item">
-                          <span className="map-legend-symbol map-legend-symbol-large" aria-hidden="true">
-                            {item.sample}
-                          </span>
-                          <div className="map-legend-copy">
-                            <strong>{item.label}</strong>
-                            <span>{item.detail}</span>
+                  ) : (
+                    <div className="minimap" style={minimapStyle}>
+                      Waiting for GRAPHIC_MAP MSDP data.
+                    </div>
+                  )
+                ) : activeMapTab === 'graphicLegend' ? (
+                  <div className="map-legend-pane" style={minimapStyle}>
+                    <section className="map-legend-section">
+                      <p className="map-legend-note">
+                        Sector names cross-reference Krynn&apos;s ASCII map tables; swatches match this client&apos;s graphic-map colors.
+                      </p>
+                      <div className="map-legend-grid">
+                        {GRAPHIC_MAP_LEGEND_ITEMS.map((item) => (
+                          <div key={item.id} className="map-legend-item">
+                            <span
+                              className="map-legend-swatch"
+                              style={{ background: getGraphicMapSectorColor(item.sector ?? 0, false) }}
+                              aria-hidden="true"
+                            />
+                            <div className="map-legend-copy">
+                              <strong>{item.label}</strong>
+                              <span>{item.detail}</span>
+                              {item.sample ? (
+                                <span
+                                  className="map-legend-sample"
+                                  dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample) }}
+                                />
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              ) : activeMapTab === 'ascii' ? (
-                <pre className="minimap map-ascii-pane" style={minimapStyle} dangerouslySetInnerHTML={{ __html: renderMudHtml(asciiMapOutput) }} />
-              ) : (
-                <div className="map-legend-pane" style={minimapStyle}>
-                  <section className="map-legend-section">
-                    <p className="map-legend-note">
-                      Character samples cross-reference Krynn&apos;s `compact_door_info[]` and compact `map_info[]` entries in `asciimap.c`.
-                    </p>
-                    <div className="map-legend-grid map-legend-grid-ascii">
-                      {ASCII_MAP_LEGEND_ITEMS.map((item) => (
-                        <div key={item.id} className="map-legend-item">
-                          <span
-                            className="map-legend-symbol"
-                            dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample ?? '') }}
-                          />
-                          <div className="map-legend-copy">
-                            <strong>{item.label}</strong>
-                            <span>{item.detail}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                </div>
-              )}
-            </div>
-          </section>
+                        ))}
+                      </div>
+                    </section>
 
-          <section className="panel tabbed-panel">
+                    <section className="map-legend-section">
+                      <h3>Special exits</h3>
+                      <p className="map-legend-note">
+                        `GRAPHIC_MAP.sp` markers from Krynn&apos;s `build_graphic_map_specials()` output.
+                      </p>
+                      <div className="map-legend-grid map-legend-grid-compact">
+                        {GRAPHIC_MAP_SPECIAL_LEGEND_ITEMS.map((item) => (
+                          <div key={item.id} className="map-legend-item">
+                            <span className="map-legend-symbol map-legend-symbol-large" aria-hidden="true">
+                              {item.sample}
+                            </span>
+                            <div className="map-legend-copy">
+                              <strong>{item.label}</strong>
+                              <span>{item.detail}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                ) : activeMapTab === 'ascii' ? (
+                  <pre className="minimap map-ascii-pane" style={minimapStyle} dangerouslySetInnerHTML={{ __html: renderMudHtml(asciiMapOutput) }} />
+                ) : (
+                  <div className="map-legend-pane" style={minimapStyle}>
+                    <section className="map-legend-section">
+                      <p className="map-legend-note">
+                        Character samples cross-reference Krynn&apos;s `compact_door_info[]` and compact `map_info[]` entries in `asciimap.c`.
+                      </p>
+                      <div className="map-legend-grid map-legend-grid-ascii">
+                        {ASCII_MAP_LEGEND_ITEMS.map((item) => (
+                          <div key={item.id} className="map-legend-item">
+                            <span
+                              className="map-legend-symbol"
+                              dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample ?? '') }}
+                            />
+                            <div className="map-legend-copy">
+                              <strong>{item.label}</strong>
+                              <span>{item.detail}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <section className="panel tabbed-panel">
             <div className="tab-strip" role="tablist" aria-label="Sidebar sections">
               {SIDEBAR_TABS.map((tab) => (
                 <button
@@ -2193,8 +2237,9 @@ function App() {
                 <AffectsPanel value={mudState.affects} />
               ) : null}
             </div>
-          </section>
-        </aside>
+            </section>
+          </aside>
+        )}
       </main>
     </div>
   )
@@ -2575,6 +2620,7 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
   }
 
   const terminalRecord = terminalValue as Record<string, unknown>
+  const layoutRecord = isObjectRecord(record.layout) ? record.layout : null
   const minimapRecord = isObjectRecord(record.minimap) ? record.minimap : null
   const sidebarRecord = isObjectRecord(record.sidebar) ? record.sidebar : null
 
@@ -2585,8 +2631,14 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
       customHost: normalizeMudHost(readOptionalString(connectionRecord ?? {}, ['customHost'])),
       customPort: normalizeMudPort(readNumericSetting(connectionRecord?.customPort)),
     },
+    layout: {
+      minimalistMode:
+        typeof layoutRecord?.minimalistMode === 'boolean'
+          ? layoutRecord.minimalistMode
+          : DEFAULT_CLIENT_SETTINGS.layout.minimalistMode,
+    },
     terminal: {
-      fontSize: clampNumber(readNumericSetting(terminalRecord.fontSize), 10, 32, DEFAULT_CLIENT_SETTINGS.terminal.fontSize),
+      fontSize: clampNumber(readNumericSetting(terminalRecord.fontSize), 8, 32, DEFAULT_CLIENT_SETTINGS.terminal.fontSize),
       lineHeight: clampNumber(
         readNumericSetting(terminalRecord.lineHeight),
         1.2,
