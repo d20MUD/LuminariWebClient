@@ -7,6 +7,13 @@ LuminariWebClient is a web-based MUD client for **LuminariMUD-compatible** games
 - Browser terminal with ANSI-colored game output
 - Compact responsive layout optimized for smaller screens
 - Auto-collapsing header after connect, with a small show/hide toggle
+- Layout menu with persisted display controls for:
+  - minimalist mode
+  - graphic map, graphic legend, ASCII map, and ASCII legend tabs
+  - Player info, Quests, Group, and Affects sidebar tabs
+  - Player info sections including character name, race, class, ability scores, saving throws, position, attack, armor class, alignment, and money
+  - sidebar width using either a percentage or fixed pixel value
+  - one-click All on / All off layout toggles
 - Compact HUD with HP, PSP, movement, EXP, opponent, and tank bars
 - Tank and opponent gauges with overlaid names
 - MSDP-driven **MINIMAP** display
@@ -30,6 +37,21 @@ LuminariWebClient is a web-based MUD client for **LuminariMUD-compatible** games
 - Luminari `^` color-code rendering in non-terminal UI text
 - Shared settings file for ports, defaults, presets, and personalization
 - Node proxy that negotiates MSDP and bridges browser WebSocket traffic to the MUD
+
+## Client layout settings
+
+The **Layout** top menu lets players tailor the right-side UI without editing code.
+
+- toggle **Minimalist mode**
+- show or hide each map tab and legend independently
+- show or hide the **Player info**, **Quests**, **Group**, and **Affects** sidebar tabs
+- choose which details appear inside **Player info**
+- set the sidebar width as either:
+  - a percentage of the main layout
+  - a fixed pixel width
+- use **All on** or **All off** to quickly enable or disable all layout-controlled panels and sections
+
+These layout preferences are stored with the normal client settings, so they persist in cookies and are included when saving or loading a full client settings file.
 
 ## Architecture
 
