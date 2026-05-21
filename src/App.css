@@ -163,7 +163,7 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--layout-sidebar-width, 26rem));
   flex: 1;
   gap: 1rem;
   min-height: 0;

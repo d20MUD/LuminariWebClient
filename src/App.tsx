@@ -138,6 +138,20 @@ type SidebarTabId = 'character' | 'quests' | 'group' | 'affects'
 
 type MapPanelTabId = 'graphic' | 'graphicLegend' | 'ascii' | 'asciiLegend'
 
+type SidebarWidthUnit = 'percent' | 'pixels'
+
+type PlayerInfoSectionId =
+  | 'characterName'
+  | 'race'
+  | 'className'
+  | 'abilityScores'
+  | 'savingThrows'
+  | 'position'
+  | 'attack'
+  | 'armorClass'
+  | 'alignment'
+  | 'money'
+
 type DefaultMapType = 'graphic' | 'ascii'
 
 type SidebarTab = {
@@ -184,6 +198,12 @@ type ClientSettings = {
   }
   layout: {
     minimalistMode: boolean
+    sidebarWidthUnit: SidebarWidthUnit
+    sidebarWidthPercent: number
+    sidebarWidthPixels: number
+    mapPanels: Record<MapPanelTabId, boolean>
+    sidebarTabs: Record<SidebarTabId, boolean>
+    playerInfoSections: Record<PlayerInfoSectionId, boolean>
   }
   terminal: {
     fontSize: number
@@ -210,7 +230,39 @@ type AutomationNotice = {
   text: string
 }
 
-type AutomationMenuId = 'aliases' | 'triggers' | 'keyBindings' | 'msdpVars' | 'settings'
+type AutomationMenuId = 'aliases' | 'triggers' | 'keyBindings' | 'msdpVars' | 'layout' | 'settings'
+
+const DEFAULT_LAYOUT_MAP_PANELS: Record<MapPanelTabId, boolean> = {
+  graphic: true,
+  graphicLegend: true,
+  ascii: true,
+  asciiLegend: true,
+}
+
+const DEFAULT_LAYOUT_SIDEBAR_TABS: Record<SidebarTabId, boolean> = {
+  character: true,
+  quests: true,
+  group: true,
+  affects: true,
+}
+
+const DEFAULT_LAYOUT_PLAYER_INFO_SECTIONS: Record<PlayerInfoSectionId, boolean> = {
+  characterName: true,
+  race: true,
+  className: true,
+  abilityScores: true,
+  savingThrows: true,
+  position: true,
+  attack: true,
+  armorClass: true,
+  alignment: true,
+  money: true,
+}
+
+const SIDEBAR_WIDTH_UNIT_OPTIONS: Array<{ value: SidebarWidthUnit; label: string }> = [
+  { value: 'percent', label: 'Percentage' },
+  { value: 'pixels', label: 'Pixels' },
+]
 
 const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   connection: {
@@ -221,6 +273,12 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
   },
   layout: {
     minimalistMode: false,
+    sidebarWidthUnit: 'pixels',
+    sidebarWidthPercent: 30,
+    sidebarWidthPixels: 416,
+    mapPanels: { ...DEFAULT_LAYOUT_MAP_PANELS },
+    sidebarTabs: { ...DEFAULT_LAYOUT_SIDEBAR_TABS },
+    playerInfoSections: { ...DEFAULT_LAYOUT_PLAYER_INFO_SECTIONS },
   },
   terminal: {
     fontSize: 14,
@@ -334,10 +392,37 @@ const MSDP_VARIABLE_GROUPS: Array<{
 ]
 
 const SIDEBAR_TABS: SidebarTab[] = [
-  { id: 'character', label: 'Character' },
+  { id: 'character', label: 'Player info' },
   { id: 'quests', label: 'Quests' },
   { id: 'group', label: 'Group' },
   { id: 'affects', label: 'Affects' },
+]
+
+const LAYOUT_MAP_TOGGLE_OPTIONS: Array<{ id: MapPanelTabId; label: string }> = [
+  { id: 'graphic', label: 'Graphic map' },
+  { id: 'graphicLegend', label: 'Graphic legend' },
+  { id: 'ascii', label: 'ASCII map' },
+  { id: 'asciiLegend', label: 'ASCII legend' },
+]
+
+const LAYOUT_SIDEBAR_TOGGLE_OPTIONS: Array<{ id: SidebarTabId; label: string }> = [
+  { id: 'character', label: 'Player info tab' },
+  { id: 'group', label: 'Group tab' },
+  { id: 'affects', label: 'Affects tab' },
+  { id: 'quests', label: 'Quest tab' },
+]
+
+const PLAYER_INFO_SECTION_TOGGLE_OPTIONS: Array<{ id: PlayerInfoSectionId; label: string }> = [
+  { id: 'characterName', label: 'Character name' },
+  { id: 'race', label: 'Race' },
+  { id: 'className', label: 'Class' },
+  { id: 'abilityScores', label: 'Ability scores' },
+  { id: 'savingThrows', label: 'Saving throws' },
+  { id: 'position', label: 'Position' },
+  { id: 'attack', label: 'Attack' },
+  { id: 'armorClass', label: 'Armor class' },
+  { id: 'alignment', label: 'Alignment' },
+  { id: 'money', label: 'Money' },
 ]
 
 const MAP_PANEL_TABS: MapPanelTab[] = [
@@ -439,8 +524,8 @@ function App() {
   const [statusDetail, setStatusDetail] = useState('Awaiting connection.')
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
   const [openAutomationMenu, setOpenAutomationMenu] = useState<AutomationMenuId | null>(null)
-  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTabId>('character')
-  const [activeMapTab, setActiveMapTab] = useState<MapPanelTabId>(() => getDefaultMapPanelTab(loadClientSettingsFromCookies()))
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTabId>(() => getDefaultSidebarTab(initialClientSettings))
+  const [activeMapTab, setActiveMapTab] = useState<MapPanelTabId>(() => getDefaultMapPanelTab(initialClientSettings))
   const socketRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<HTMLDivElement | null>(null)
   const commandInputRef = useRef<HTMLInputElement | null>(null)
@@ -452,6 +537,8 @@ function App() {
   const triggersRef = useRef<TriggerDefinition[]>(triggers)
   const clientSettingsRef = useRef(clientSettings)
   const terminalHistoryLineLimitRef = useRef(clientSettings.terminal.maxHistoryLines)
+  const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
+  const visibleSidebarTabs = useMemo(() => getVisibleSidebarTabs(clientSettings.layout), [clientSettings.layout])
 
   useEffect(() => {
     document.title = uiSettings.personalization.browserTitle
@@ -759,6 +846,19 @@ function App() {
     }),
     [clientSettings.sidebar.fontFamily, clientSettings.sidebar.fontSize],
   )
+  const layoutStyle = useMemo<CSSProperties & { '--layout-sidebar-width': string }>(
+    () => ({
+      '--layout-sidebar-width':
+        clientSettings.layout.sidebarWidthUnit === 'percent'
+          ? `${clientSettings.layout.sidebarWidthPercent}%`
+          : `${clientSettings.layout.sidebarWidthPixels}px`,
+    }),
+    [
+      clientSettings.layout.sidebarWidthPercent,
+      clientSettings.layout.sidebarWidthPixels,
+      clientSettings.layout.sidebarWidthUnit,
+    ],
+  )
 
   const asciiMapOutput = useMemo(() => buildAsciiMapOutput(mudState.minimap), [mudState.minimap])
   const isWildernessRoom = useMemo(() => isWildernessRoomVnum(mudState.roomVnum), [mudState.roomVnum])
@@ -770,18 +870,39 @@ function App() {
     () => buildGraphicMap(activeGraphicMapData, isWildernessRoom ? undefined : mudState.minimap, isWildernessRoom),
     [activeGraphicMapData, isWildernessRoom, mudState.minimap],
   )
+  const resolvedActiveMapTab = useMemo<MapPanelTabId>(
+    () => visibleMapTabs.find((tab) => tab.id === activeMapTab)?.id ?? visibleMapTabs[0]?.id ?? activeMapTab,
+    [activeMapTab, visibleMapTabs],
+  )
+  const resolvedActiveSidebarTab = useMemo<SidebarTabId>(
+    () => visibleSidebarTabs.find((tab) => tab.id === activeSidebarTab)?.id ?? visibleSidebarTabs[0]?.id ?? activeSidebarTab,
+    [activeSidebarTab, visibleSidebarTabs],
+  )
   const activeMapPanel = useMemo(
-    () => MAP_PANEL_TABS.find((tab) => tab.id === activeMapTab) ?? MAP_PANEL_TABS[0],
-    [activeMapTab],
+    () => MAP_PANEL_TABS.find((tab) => tab.id === resolvedActiveMapTab) ?? MAP_PANEL_TABS[0],
+    [resolvedActiveMapTab],
   )
   const selectedMudPreset = useMemo(
     () => uiSettings.connection.muds.find((mud) => mud.id === selectedMudId),
     [selectedMudId, uiSettings.connection.muds],
   )
   const isMinimalistMode = clientSettings.layout.minimalistMode
+  const showMapPanel = visibleMapTabs.length > 0
+  const showSidebarPanel = visibleSidebarTabs.length > 0
   const showMinimalistConnectionBar = isMinimalistMode && !connected
   const showHeader = showMinimalistConnectionBar || (!isMinimalistMode && isHeaderVisible)
   const showBranding = !isMinimalistMode && isHeaderVisible
+  const showAbilityScores = clientSettings.layout.playerInfoSections.abilityScores
+  const showSavingThrows = clientSettings.layout.playerInfoSections.savingThrows
+  const showCharacterName = clientSettings.layout.playerInfoSections.characterName
+  const showRace = clientSettings.layout.playerInfoSections.race
+  const showClassName = clientSettings.layout.playerInfoSections.className
+  const showPosition = clientSettings.layout.playerInfoSections.position
+  const showAttack = clientSettings.layout.playerInfoSections.attack
+  const showArmorClass = clientSettings.layout.playerInfoSections.armorClass
+  const showAlignment = clientSettings.layout.playerInfoSections.alignment
+  const showMoney = clientSettings.layout.playerInfoSections.money
+  const showPlayerInfoStats = showPosition || showAttack || showArmorClass || showAlignment || showMoney
   const abilityScores = useMemo(
     () => [
       { label: 'STR', value: mudState.strength },
@@ -802,9 +923,19 @@ function App() {
     [mudState.fortitude, mudState.reflex, mudState.willpower],
   )
   const characterHeading = useMemo(
-    () => formatCharacterHeading(mudState.characterName, mudState.title),
-    [mudState.characterName, mudState.title],
+    () => formatCharacterHeading(showCharacterName ? mudState.characterName : undefined, mudState.title),
+    [mudState.characterName, mudState.title, showCharacterName],
   )
+  const playerInfoSummary = useMemo(() => {
+    const summaryParts = [
+      mudState.level ? `Level ${mudState.level}` : undefined,
+      showRace ? mudState.race : undefined,
+      showClassName ? mudState.className : undefined,
+    ].filter(Boolean)
+
+    return summaryParts.join(' · ')
+  }, [mudState.className, mudState.level, mudState.race, showClassName, showRace])
+  const showCharacterHeading = showCharacterName || Boolean(mudState.title?.trim())
 
   useEffect(() => {
     if (!proxyReady) {
@@ -1142,16 +1273,28 @@ function App() {
   }
 
   function updateMinimapSettings(updates: Partial<ClientSettings['minimap']>) {
-    setClientSettings((current) => ({
-      ...current,
-      minimap: {
-        ...current.minimap,
-        ...updates,
-      },
-    }))
-    if (updates.defaultMapType !== undefined) {
-      setActiveMapTab(updates.defaultMapType === 'ascii' ? 'ascii' : 'graphic')
+    let nextMapTab: MapPanelTabId | null = null
+
+    setClientSettings((current) => {
+      const nextSettings = normalizeClientSettings({
+        ...current,
+        minimap: {
+          ...current.minimap,
+          ...updates,
+        },
+      })
+
+      if (updates.defaultMapType !== undefined) {
+        nextMapTab = getDefaultMapPanelTab(nextSettings)
+      }
+
+      return nextSettings
+    })
+
+    if (nextMapTab) {
+      setActiveMapTab(nextMapTab)
     }
+
     setAutomationNotice(null)
   }
 
@@ -1190,6 +1333,94 @@ function App() {
       layout: {
         ...current.layout,
         ...updates,
+      },
+    }))
+    setAutomationNotice(null)
+  }
+
+  function updateSidebarWidthUnit(sidebarWidthUnit: SidebarWidthUnit) {
+    updateLayoutSettings({ sidebarWidthUnit })
+  }
+
+  function updateSidebarWidthPercent(sidebarWidthPercent: number) {
+    updateLayoutSettings({ sidebarWidthPercent: clampSidebarWidthPercent(sidebarWidthPercent) })
+  }
+
+  function updateSidebarWidthPixels(sidebarWidthPixels: number) {
+    updateLayoutSettings({ sidebarWidthPixels: clampSidebarWidthPixels(sidebarWidthPixels) })
+  }
+
+  function updateLayoutMapPanelVisibility(panelId: MapPanelTabId, visible: boolean) {
+    setClientSettings((current) => ({
+      ...current,
+      layout: {
+        ...current.layout,
+        mapPanels: {
+          ...current.layout.mapPanels,
+          [panelId]: visible,
+        },
+      },
+    }))
+    setAutomationNotice(null)
+  }
+
+  function updateLayoutSidebarTabVisibility(tabId: SidebarTabId, visible: boolean) {
+    setClientSettings((current) => ({
+      ...current,
+      layout: {
+        ...current.layout,
+        sidebarTabs: {
+          ...current.layout.sidebarTabs,
+          [tabId]: visible,
+        },
+      },
+    }))
+    setAutomationNotice(null)
+  }
+
+  function updateLayoutPlayerInfoSectionVisibility(sectionId: PlayerInfoSectionId, visible: boolean) {
+    setClientSettings((current) => ({
+      ...current,
+      layout: {
+        ...current.layout,
+        playerInfoSections: {
+          ...current.layout.playerInfoSections,
+          [sectionId]: visible,
+        },
+      },
+    }))
+    setAutomationNotice(null)
+  }
+
+  function setAllLayoutVisibility(visible: boolean) {
+    setClientSettings((current) => ({
+      ...current,
+      layout: {
+        ...current.layout,
+        mapPanels: {
+          graphic: visible,
+          graphicLegend: visible,
+          ascii: visible,
+          asciiLegend: visible,
+        },
+        sidebarTabs: {
+          character: visible,
+          quests: visible,
+          group: visible,
+          affects: visible,
+        },
+        playerInfoSections: {
+          characterName: visible,
+          race: visible,
+          className: visible,
+          abilityScores: visible,
+          savingThrows: visible,
+          position: visible,
+          attack: visible,
+          armorClass: visible,
+          alignment: visible,
+          money: visible,
+        },
       },
     }))
     setAutomationNotice(null)
@@ -1237,6 +1468,7 @@ function App() {
       setSelectedMudId(connectionDefaults.selectedMudId)
       terminalHistoryLineLimitRef.current = importedConfig.settings.terminal.maxHistoryLines
       setTerminalOutput((current) => trimTerminalOutputLines(current, importedConfig.settings.terminal.maxHistoryLines))
+      setActiveSidebarTab(getDefaultSidebarTab(importedConfig.settings))
       setActiveMapTab(getDefaultMapPanelTab(importedConfig.settings))
       setAliases(importedConfig.aliases)
       setTriggers(importedConfig.triggers)
@@ -1588,6 +1820,187 @@ function App() {
           <div className="window-menu-item">
             <button
               type="button"
+              className={`window-menu-link${openAutomationMenu === 'layout' ? ' window-menu-link-open' : ''}`}
+              aria-expanded={openAutomationMenu === 'layout'}
+              onClick={() => toggleAutomationMenu('layout')}
+            >
+              Layout
+            </button>
+
+            {openAutomationMenu === 'layout' ? (
+              <div className="window-menu-dropdown">
+                <div className="automation-menu-content">
+                  <div className="automation-section-header">
+                    <div>
+                      <h3>Layout</h3>
+                      <p>Choose which map views, sidebar tabs, and player info details remain visible in the client.</p>
+                    </div>
+
+                    <div className="automation-actions">
+                      <button type="button" onClick={() => setAllLayoutVisibility(true)}>
+                        All on
+                      </button>
+                      <button type="button" onClick={() => setAllLayoutVisibility(false)}>
+                        All off
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="settings-list">
+                    <section className="settings-group">
+                      <div className="settings-group-header">
+                        <h4>Screen layout</h4>
+                        <p>Hide the header, sidebar panels, and gauges so small screens can focus on the main output.</p>
+                      </div>
+
+                      <div className="settings-toggle-list">
+                        <label className="automation-toggle">
+                          <input
+                            type="checkbox"
+                            checked={clientSettings.layout.minimalistMode}
+                            onChange={(event) => updateLayoutSettings({ minimalistMode: event.target.checked })}
+                          />
+                          <span>Minimalist mode</span>
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="settings-group">
+                      <div className="settings-group-header">
+                        <h4>Sidebar width</h4>
+                        <p>Choose whether the sidebar width uses a percentage of the layout or a fixed pixel width.</p>
+                      </div>
+
+                      <div className="settings-fields">
+                        <label>
+                          <span>Width mode</span>
+                          <select
+                            value={clientSettings.layout.sidebarWidthUnit}
+                            onChange={(event) => {
+                              if (isSidebarWidthUnit(event.target.value)) {
+                                updateSidebarWidthUnit(event.target.value)
+                              }
+                            }}
+                          >
+                            {SIDEBAR_WIDTH_UNIT_OPTIONS.map((option) => (
+                              <option key={option.value} value={option.value}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label>
+                          <span>Percent width</span>
+                          <input
+                            type="number"
+                            min={15}
+                            max={50}
+                            step={1}
+                            inputMode="numeric"
+                            value={clientSettings.layout.sidebarWidthPercent}
+                            onChange={(event) => {
+                              const nextValue = parsePositiveIntegerInput(event.target.value)
+                              if (nextValue !== null) {
+                                updateSidebarWidthPercent(nextValue)
+                              }
+                            }}
+                          />
+                        </label>
+
+                        <label>
+                          <span>Pixel width</span>
+                          <input
+                            type="number"
+                            min={240}
+                            max={960}
+                            step={1}
+                            inputMode="numeric"
+                            value={clientSettings.layout.sidebarWidthPixels}
+                            onChange={(event) => {
+                              const nextValue = parsePositiveIntegerInput(event.target.value)
+                              if (nextValue !== null) {
+                                updateSidebarWidthPixels(nextValue)
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
+                    </section>
+
+                    <section className="settings-group">
+                      <div className="settings-group-header">
+                        <h4>Map tabs</h4>
+                        <p>Toggle the graphic and ASCII map tabs and their legends on or off.</p>
+                      </div>
+
+                      <div className="settings-toggle-list">
+                        {LAYOUT_MAP_TOGGLE_OPTIONS.map((option) => (
+                          <label key={option.id} className="automation-toggle">
+                            <input
+                              type="checkbox"
+                              checked={clientSettings.layout.mapPanels[option.id]}
+                              onChange={(event) => updateLayoutMapPanelVisibility(option.id, event.target.checked)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="settings-group">
+                      <div className="settings-group-header">
+                        <h4>Sidebar tabs</h4>
+                        <p>Show or hide the Player info, Group, Affects, and Quest tabs.</p>
+                      </div>
+
+                      <div className="settings-toggle-list">
+                        {LAYOUT_SIDEBAR_TOGGLE_OPTIONS.map((option) => (
+                          <label key={option.id} className="automation-toggle">
+                            <input
+                              type="checkbox"
+                              checked={clientSettings.layout.sidebarTabs[option.id]}
+                              onChange={(event) => updateLayoutSidebarTabVisibility(option.id, event.target.checked)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+
+                    <section className="settings-group">
+                      <div className="settings-group-header">
+                        <h4>Player info details</h4>
+                        <p>Choose which sections remain visible inside the Player info tab.</p>
+                      </div>
+
+                      {!clientSettings.layout.sidebarTabs.character ? (
+                        <p className="automation-menu-help">Turn the Player info tab back on to show these details.</p>
+                      ) : null}
+
+                      <div className="settings-toggle-list">
+                        {PLAYER_INFO_SECTION_TOGGLE_OPTIONS.map((option) => (
+                          <label key={option.id} className="automation-toggle">
+                            <input
+                              type="checkbox"
+                              checked={clientSettings.layout.playerInfoSections[option.id]}
+                              disabled={!clientSettings.layout.sidebarTabs.character}
+                              onChange={(event) => updateLayoutPlayerInfoSectionVisibility(option.id, event.target.checked)}
+                            />
+                            <span>{option.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+
+          <div className="window-menu-item">
+            <button
+              type="button"
               className={`window-menu-link${openAutomationMenu === 'settings' ? ' window-menu-link-open' : ''}`}
               aria-expanded={openAutomationMenu === 'settings'}
               onClick={() => toggleAutomationMenu('settings')}
@@ -1681,24 +2094,6 @@ function App() {
                           </label>
                         </div>
                       ) : null}
-                    </section>
-
-                    <section className="settings-group">
-                      <div className="settings-group-header">
-                        <h4>Screen layout</h4>
-                        <p>Hide the header, sidebar panels, and gauges so small screens can focus on the main output.</p>
-                      </div>
-
-                      <div className="settings-toggle-list">
-                        <label className="automation-toggle">
-                          <input
-                            type="checkbox"
-                            checked={clientSettings.layout.minimalistMode}
-                            onChange={(event) => updateLayoutSettings({ minimalistMode: event.target.checked })}
-                          />
-                          <span>Minimalist mode</span>
-                        </label>
-                      </div>
                     </section>
 
                     <section className="settings-group">
@@ -1963,7 +2358,7 @@ function App() {
         </div>
       ) : null}
 
-      <main className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}`}>
+      <main className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}`} style={layoutStyle}>
         <section className="terminal-column panel">
           <div
             ref={terminalRef}
@@ -2001,243 +2396,255 @@ function App() {
           </form>
         </section>
 
-        {isMinimalistMode ? null : (
+        {isMinimalistMode || (!showMapPanel && !showSidebarPanel) ? null : (
           <aside className="sidebar">
-            <section className="panel map-panel">
-              <div className="panel-header">
-                <div>
-                  <h2>Map</h2>
+            {showMapPanel ? (
+              <section className="panel map-panel">
+                <div className="panel-header">
+                  <div>
+                    <h2>Map</h2>
+                  </div>
                 </div>
-              </div>
 
-              <div className="map-tab-strip" role="tablist" aria-label="Map views">
-                {MAP_PANEL_TABS.map((tab) => (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={activeMapTab === tab.id}
-                    className={`map-tab-button${activeMapTab === tab.id ? ' map-tab-button-active' : ''}`}
-                    onClick={() => setActiveMapTab(tab.id)}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
+                <div className="map-tab-strip" role="tablist" aria-label="Map views">
+                  {visibleMapTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={resolvedActiveMapTab === tab.id}
+                      className={`map-tab-button${resolvedActiveMapTab === tab.id ? ' map-tab-button-active' : ''}`}
+                      onClick={() => setActiveMapTab(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
 
-              <div className="map-tab-panel" role="tabpanel" aria-label={activeMapPanel.panelLabel}>
-                {activeMapTab === 'graphic' ? (
-                  graphicMap ? (
-                    <div className="minimap minimap-graphic" style={minimapStyle}>
-                      <div
-                        className="graphic-map"
-                        style={{
-                          gridTemplateColumns: `repeat(${graphicMap.width}, minmax(0, 1fr))`,
-                          gridTemplateRows: `repeat(${graphicMap.height}, minmax(0, 1fr))`,
-                          aspectRatio: `${graphicMap.width} / ${graphicMap.height}`,
-                          width: '100%',
-                          maxWidth: `${clientSettings.minimap.paneHeight}rem`,
-                          maxHeight: `${clientSettings.minimap.paneHeight}rem`,
-                        }}
-                      >
-                        {graphicMap.cells.map((cell) => (
-                          <div
-                            key={cell.key}
-                            className={[
-                              'graphic-map-cell',
-                              cell.kind === 'room'
-                                ? `graphic-map-tile${cell.isCurrent ? ' graphic-map-tile-current' : ''}`
-                                : cell.kind === 'connector'
-                                  ? `graphic-map-connector graphic-map-connector-${cell.orientation}`
-                                  : 'graphic-map-empty',
-                            ].join(' ')}
-                            style={cell.color ? { color: cell.color, background: cell.kind === 'room' ? cell.color : undefined } : undefined}
-                            title={cell.title}
-                          >
-                            {cell.kind === 'room' && cell.markers.length > 0 ? (
-                              <div className="graphic-map-markers" aria-hidden="true">
-                                {cell.markers.map((marker) => (
-                                  <span
-                                    key={marker.id}
-                                    className={marker.className ? `graphic-map-marker ${marker.className}` : 'graphic-map-marker'}
-                                    title={marker.label}
-                                  >
-                                    {marker.icon}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : null}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="minimap" style={minimapStyle}>
-                      Waiting for GRAPHIC_MAP MSDP data.
-                    </div>
-                  )
-                ) : activeMapTab === 'graphicLegend' ? (
-                  <div className="map-legend-pane" style={minimapStyle}>
-                    <section className="map-legend-section">
-                      <p className="map-legend-note">
-                        Sector names cross-reference Krynn&apos;s ASCII map tables; swatches match this client&apos;s graphic-map colors.
-                      </p>
-                      <div className="map-legend-grid">
-                        {GRAPHIC_MAP_LEGEND_ITEMS.map((item) => (
-                          <div key={item.id} className="map-legend-item">
-                            <span
-                              className="map-legend-swatch"
-                              style={{ background: getGraphicMapSectorColor(item.sector ?? 0, false) }}
-                              aria-hidden="true"
-                            />
-                            <div className="map-legend-copy">
-                              <strong>{item.label}</strong>
-                              <span>{item.detail}</span>
-                              {item.sample ? (
-                                <span
-                                  className="map-legend-sample"
-                                  dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample) }}
-                                />
+                <div className="map-tab-panel" role="tabpanel" aria-label={activeMapPanel.panelLabel}>
+                  {resolvedActiveMapTab === 'graphic' ? (
+                    graphicMap ? (
+                      <div className="minimap minimap-graphic" style={minimapStyle}>
+                        <div
+                          className="graphic-map"
+                          style={{
+                            gridTemplateColumns: `repeat(${graphicMap.width}, minmax(0, 1fr))`,
+                            gridTemplateRows: `repeat(${graphicMap.height}, minmax(0, 1fr))`,
+                            aspectRatio: `${graphicMap.width} / ${graphicMap.height}`,
+                            width: '100%',
+                            maxWidth: `${clientSettings.minimap.paneHeight}rem`,
+                            maxHeight: `${clientSettings.minimap.paneHeight}rem`,
+                          }}
+                        >
+                          {graphicMap.cells.map((cell) => (
+                            <div
+                              key={cell.key}
+                              className={[
+                                'graphic-map-cell',
+                                cell.kind === 'room'
+                                  ? `graphic-map-tile${cell.isCurrent ? ' graphic-map-tile-current' : ''}`
+                                  : cell.kind === 'connector'
+                                    ? `graphic-map-connector graphic-map-connector-${cell.orientation}`
+                                    : 'graphic-map-empty',
+                              ].join(' ')}
+                              style={cell.color ? { color: cell.color, background: cell.kind === 'room' ? cell.color : undefined } : undefined}
+                              title={cell.title}
+                            >
+                              {cell.kind === 'room' && cell.markers.length > 0 ? (
+                                <div className="graphic-map-markers" aria-hidden="true">
+                                  {cell.markers.map((marker) => (
+                                    <span
+                                      key={marker.id}
+                                      className={marker.className ? `graphic-map-marker ${marker.className}` : 'graphic-map-marker'}
+                                      title={marker.label}
+                                    >
+                                      {marker.icon}
+                                    </span>
+                                  ))}
+                                </div>
                               ) : null}
                             </div>
-                          </div>
-                        ))}
+                          ))}
+                        </div>
                       </div>
-                    </section>
-
-                    <section className="map-legend-section">
-                      <h3>Special exits</h3>
-                      <p className="map-legend-note">
-                        `GRAPHIC_MAP.sp` markers from Krynn&apos;s `build_graphic_map_specials()` output.
-                      </p>
-                      <div className="map-legend-grid map-legend-grid-compact">
-                        {GRAPHIC_MAP_SPECIAL_LEGEND_ITEMS.map((item) => (
-                          <div key={item.id} className="map-legend-item">
-                            <span className="map-legend-symbol map-legend-symbol-large" aria-hidden="true">
-                              {item.sample}
-                            </span>
-                            <div className="map-legend-copy">
-                              <strong>{item.label}</strong>
-                              <span>{item.detail}</span>
+                    ) : (
+                      <div className="minimap" style={minimapStyle}>
+                        Waiting for GRAPHIC_MAP MSDP data.
+                      </div>
+                    )
+                  ) : resolvedActiveMapTab === 'graphicLegend' ? (
+                    <div className="map-legend-pane" style={minimapStyle}>
+                      <section className="map-legend-section">
+                        <p className="map-legend-note">
+                          Sector names cross-reference Krynn&apos;s ASCII map tables; swatches match this client&apos;s graphic-map colors.
+                        </p>
+                        <div className="map-legend-grid">
+                          {GRAPHIC_MAP_LEGEND_ITEMS.map((item) => (
+                            <div key={item.id} className="map-legend-item">
+                              <span
+                                className="map-legend-swatch"
+                                style={{ background: getGraphicMapSectorColor(item.sector ?? 0, false) }}
+                                aria-hidden="true"
+                              />
+                              <div className="map-legend-copy">
+                                <strong>{item.label}</strong>
+                                <span>{item.detail}</span>
+                                {item.sample ? (
+                                  <span
+                                    className="map-legend-sample"
+                                    dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample) }}
+                                  />
+                                ) : null}
+                              </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-                ) : activeMapTab === 'ascii' ? (
-                  <pre className="minimap map-ascii-pane" style={minimapStyle} dangerouslySetInnerHTML={{ __html: renderMudHtml(asciiMapOutput) }} />
-                ) : (
-                  <div className="map-legend-pane" style={minimapStyle}>
-                    <section className="map-legend-section">
-                      <p className="map-legend-note">
-                        Character samples cross-reference Krynn&apos;s `compact_door_info[]` and compact `map_info[]` entries in `asciimap.c`.
-                      </p>
-                      <div className="map-legend-grid map-legend-grid-ascii">
-                        {ASCII_MAP_LEGEND_ITEMS.map((item) => (
-                          <div key={item.id} className="map-legend-item">
-                            <span
-                              className="map-legend-symbol"
-                              dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample ?? '') }}
+                          ))}
+                        </div>
+                      </section>
+
+                      <section className="map-legend-section">
+                        <h3>Special exits</h3>
+                        <p className="map-legend-note">
+                          `GRAPHIC_MAP.sp` markers from Krynn&apos;s `build_graphic_map_specials()` output.
+                        </p>
+                        <div className="map-legend-grid map-legend-grid-compact">
+                          {GRAPHIC_MAP_SPECIAL_LEGEND_ITEMS.map((item) => (
+                            <div key={item.id} className="map-legend-item">
+                              <span className="map-legend-symbol map-legend-symbol-large" aria-hidden="true">
+                                {item.sample}
+                              </span>
+                              <div className="map-legend-copy">
+                                <strong>{item.label}</strong>
+                                <span>{item.detail}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  ) : resolvedActiveMapTab === 'ascii' ? (
+                    <pre className="minimap map-ascii-pane" style={minimapStyle} dangerouslySetInnerHTML={{ __html: renderMudHtml(asciiMapOutput) }} />
+                  ) : (
+                    <div className="map-legend-pane" style={minimapStyle}>
+                      <section className="map-legend-section">
+                        <p className="map-legend-note">
+                          Character samples cross-reference Krynn&apos;s `compact_door_info[]` and compact `map_info[]` entries in `asciimap.c`.
+                        </p>
+                        <div className="map-legend-grid map-legend-grid-ascii">
+                          {ASCII_MAP_LEGEND_ITEMS.map((item) => (
+                            <div key={item.id} className="map-legend-item">
+                              <span
+                                className="map-legend-symbol"
+                                dangerouslySetInnerHTML={{ __html: renderMudHtml(item.sample ?? '') }}
+                              />
+                              <div className="map-legend-copy">
+                                <strong>{item.label}</strong>
+                                <span>{item.detail}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </section>
+                    </div>
+                  )}
+                </div>
+              </section>
+            ) : null}
+
+            {showSidebarPanel ? (
+              <section className="panel tabbed-panel">
+                <div className="tab-strip" role="tablist" aria-label="Sidebar sections">
+                  {visibleSidebarTabs.map((tab) => (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={resolvedActiveSidebarTab === tab.id}
+                      className={`tab-button${resolvedActiveSidebarTab === tab.id ? ' tab-button-active' : ''}`}
+                      onClick={() => setActiveSidebarTab(tab.id)}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div className="tab-panel" role="tabpanel" style={sidebarPanelStyle}>
+                  {resolvedActiveSidebarTab === 'character' ? (
+                    <>
+                      {showCharacterHeading || playerInfoSummary ? (
+                        <div className="identity-block">
+                          {showCharacterHeading ? (
+                            <strong
+                              dangerouslySetInnerHTML={{
+                                __html: renderMudHtml(characterHeading),
+                              }}
                             />
-                            <div className="map-legend-copy">
-                              <strong>{item.label}</strong>
-                              <span>{item.detail}</span>
+                          ) : null}
+                          {playerInfoSummary ? (
+                            <span
+                              dangerouslySetInnerHTML={{
+                                __html: renderMudHtml(playerInfoSummary),
+                              }}
+                            />
+                          ) : null}
+                        </div>
+                      ) : null}
+
+                      {showAbilityScores ? (
+                        <div className="ability-grid" aria-label="Ability scores">
+                          {abilityScores.map((score) => (
+                            <div key={score.label} className="ability-cell">
+                              <span className="ability-label">{score.label}</span>
+                              <span className="ability-value">{formatNumber(score.value) ?? '—'}</span>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </section>
-                  </div>
-                )}
-              </div>
-            </section>
+                          ))}
+                        </div>
+                      ) : null}
 
-            <section className="panel tabbed-panel">
-            <div className="tab-strip" role="tablist" aria-label="Sidebar sections">
-              {SIDEBAR_TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeSidebarTab === tab.id}
-                  className={`tab-button${activeSidebarTab === tab.id ? ' tab-button-active' : ''}`}
-                  onClick={() => setActiveSidebarTab(tab.id)}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
+                      {showSavingThrows ? (
+                        <div className="saving-throw-grid" aria-label="Saving throws">
+                          {savingThrows.map((save) => (
+                            <div key={save.label} className="saving-throw-cell">
+                              <span className="saving-throw-label">{save.label}</span>
+                              <span className="saving-throw-value">{formatSignedNumber(save.value)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
 
-            <div className="tab-panel" role="tabpanel" style={sidebarPanelStyle}>
-              {activeSidebarTab === 'character' ? (
-                <>
-                  <div className="identity-block">
-                    <strong
-                      dangerouslySetInnerHTML={{
-                        __html: renderMudHtml(characterHeading),
-                      }}
-                    />
-                    <span
-                      dangerouslySetInnerHTML={{
-                        __html: renderMudHtml(
-                          [mudState.level ? `Level ${mudState.level}` : undefined, mudState.race, mudState.className]
-                            .filter(Boolean)
-                            .join(' · ') || 'Awaiting MSDP profile',
-                        ),
-                      }}
-                    />
-                  </div>
+                      {showPlayerInfoStats ? (
+                        <dl className="stats-grid">
+                          {showPosition ? <Stat label="Position" value={mudState.position} /> : null}
+                          {showAttack ? <Stat label="Attack" value={formatNumber(mudState.attackBonus)} /> : null}
+                          {showArmorClass ? <Stat label="Armor Class" value={formatNumber(mudState.armorClass)} /> : null}
+                          {showAlignment ? <Stat label="Alignment" value={mudState.alignment} /> : null}
+                          {showMoney ? <Stat label="Money" value={formatNumber(mudState.money)} /> : null}
+                        </dl>
+                      ) : null}
+                    </>
+                  ) : null}
 
-                  <div className="ability-grid" aria-label="Ability scores">
-                    {abilityScores.map((score) => (
-                      <div key={score.label} className="ability-cell">
-                        <span className="ability-label">{score.label}</span>
-                        <span className="ability-value">{formatNumber(score.value) ?? '—'}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {resolvedActiveSidebarTab === 'quests' ? (
+                    mudState.questInfo ? (
+                      <QuestInfoPanel value={mudState.questInfo} />
+                    ) : (
+                      <EmptyTabMessage message="No quest data reported yet." />
+                    )
+                  ) : null}
 
-                  <div className="saving-throw-grid" aria-label="Saving throws">
-                    {savingThrows.map((save) => (
-                      <div key={save.label} className="saving-throw-cell">
-                        <span className="saving-throw-label">{save.label}</span>
-                        <span className="saving-throw-value">{formatSignedNumber(save.value)}</span>
-                      </div>
-                    ))}
-                  </div>
+                  {resolvedActiveSidebarTab === 'group' ? (
+                    mudState.group ? (
+                      <GroupPanel value={mudState.group} />
+                    ) : (
+                      <EmptyTabMessage message="No group data reported yet." />
+                    )
+                  ) : null}
 
-                  <dl className="stats-grid">
-                    <Stat label="Position" value={mudState.position} />
-                    <Stat label="Attack" value={formatNumber(mudState.attackBonus)} />
-                    <Stat label="Armor Class" value={formatNumber(mudState.armorClass)} />
-                    <Stat label="Alignment" value={mudState.alignment} />
-                    <Stat label="Money" value={formatNumber(mudState.money)} />
-                  </dl>
-                </>
-              ) : null}
-
-              {activeSidebarTab === 'quests' ? (
-                mudState.questInfo ? (
-                  <QuestInfoPanel value={mudState.questInfo} />
-                ) : (
-                  <EmptyTabMessage message="No quest data reported yet." />
-                )
-              ) : null}
-
-              {activeSidebarTab === 'group' ? (
-                mudState.group ? (
-                  <GroupPanel value={mudState.group} />
-                ) : (
-                  <EmptyTabMessage message="No group data reported yet." />
-                )
-              ) : null}
-
-              {activeSidebarTab === 'affects' ? (
-                <AffectsPanel value={mudState.affects} />
-              ) : null}
-            </div>
-            </section>
+                  {resolvedActiveSidebarTab === 'affects' ? (
+                    <AffectsPanel value={mudState.affects} />
+                  ) : null}
+                </div>
+              </section>
+            ) : null}
           </aside>
         )}
       </main>
@@ -2621,6 +3028,9 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
 
   const terminalRecord = terminalValue as Record<string, unknown>
   const layoutRecord = isObjectRecord(record.layout) ? record.layout : null
+  const layoutMapPanelsRecord = isObjectRecord(layoutRecord?.mapPanels) ? layoutRecord.mapPanels : null
+  const layoutSidebarTabsRecord = isObjectRecord(layoutRecord?.sidebarTabs) ? layoutRecord.sidebarTabs : null
+  const layoutPlayerInfoSectionsRecord = isObjectRecord(layoutRecord?.playerInfoSections) ? layoutRecord.playerInfoSections : null
   const minimapRecord = isObjectRecord(record.minimap) ? record.minimap : null
   const sidebarRecord = isObjectRecord(record.sidebar) ? record.sidebar : null
 
@@ -2636,6 +3046,95 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
         typeof layoutRecord?.minimalistMode === 'boolean'
           ? layoutRecord.minimalistMode
           : DEFAULT_CLIENT_SETTINGS.layout.minimalistMode,
+      sidebarWidthUnit: isSidebarWidthUnit(layoutRecord?.sidebarWidthUnit)
+        ? layoutRecord.sidebarWidthUnit
+        : DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthUnit,
+      sidebarWidthPercent: clampSidebarWidthPercent(
+        readNumericSetting(layoutRecord?.sidebarWidthPercent),
+        DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPercent,
+      ),
+      sidebarWidthPixels: clampSidebarWidthPixels(
+        readNumericSetting(layoutRecord?.sidebarWidthPixels),
+        DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPixels,
+      ),
+      mapPanels: {
+        graphic:
+          typeof layoutMapPanelsRecord?.graphic === 'boolean'
+            ? layoutMapPanelsRecord.graphic
+            : DEFAULT_CLIENT_SETTINGS.layout.mapPanels.graphic,
+        graphicLegend:
+          typeof layoutMapPanelsRecord?.graphicLegend === 'boolean'
+            ? layoutMapPanelsRecord.graphicLegend
+            : DEFAULT_CLIENT_SETTINGS.layout.mapPanels.graphicLegend,
+        ascii:
+          typeof layoutMapPanelsRecord?.ascii === 'boolean'
+            ? layoutMapPanelsRecord.ascii
+            : DEFAULT_CLIENT_SETTINGS.layout.mapPanels.ascii,
+        asciiLegend:
+          typeof layoutMapPanelsRecord?.asciiLegend === 'boolean'
+            ? layoutMapPanelsRecord.asciiLegend
+            : DEFAULT_CLIENT_SETTINGS.layout.mapPanels.asciiLegend,
+      },
+      sidebarTabs: {
+        character:
+          typeof layoutSidebarTabsRecord?.character === 'boolean'
+            ? layoutSidebarTabsRecord.character
+            : DEFAULT_CLIENT_SETTINGS.layout.sidebarTabs.character,
+        quests:
+          typeof layoutSidebarTabsRecord?.quests === 'boolean'
+            ? layoutSidebarTabsRecord.quests
+            : DEFAULT_CLIENT_SETTINGS.layout.sidebarTabs.quests,
+        group:
+          typeof layoutSidebarTabsRecord?.group === 'boolean'
+            ? layoutSidebarTabsRecord.group
+            : DEFAULT_CLIENT_SETTINGS.layout.sidebarTabs.group,
+        affects:
+          typeof layoutSidebarTabsRecord?.affects === 'boolean'
+            ? layoutSidebarTabsRecord.affects
+            : DEFAULT_CLIENT_SETTINGS.layout.sidebarTabs.affects,
+      },
+      playerInfoSections: {
+        characterName:
+          typeof layoutPlayerInfoSectionsRecord?.characterName === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.characterName
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.characterName,
+        race:
+          typeof layoutPlayerInfoSectionsRecord?.race === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.race
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.race,
+        className:
+          typeof layoutPlayerInfoSectionsRecord?.className === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.className
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.className,
+        abilityScores:
+          typeof layoutPlayerInfoSectionsRecord?.abilityScores === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.abilityScores
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.abilityScores,
+        savingThrows:
+          typeof layoutPlayerInfoSectionsRecord?.savingThrows === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.savingThrows
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.savingThrows,
+        position:
+          typeof layoutPlayerInfoSectionsRecord?.position === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.position
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.position,
+        attack:
+          typeof layoutPlayerInfoSectionsRecord?.attack === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.attack
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.attack,
+        armorClass:
+          typeof layoutPlayerInfoSectionsRecord?.armorClass === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.armorClass
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.armorClass,
+        alignment:
+          typeof layoutPlayerInfoSectionsRecord?.alignment === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.alignment
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.alignment,
+        money:
+          typeof layoutPlayerInfoSectionsRecord?.money === 'boolean'
+            ? layoutPlayerInfoSectionsRecord.money
+            : DEFAULT_CLIENT_SETTINGS.layout.playerInfoSections.money,
+      },
     },
     terminal: {
       fontSize: clampNumber(readNumericSetting(terminalRecord.fontSize), 8, 32, DEFAULT_CLIENT_SETTINGS.terminal.fontSize),
@@ -2817,6 +3316,22 @@ function clampTerminalHistoryLines(value: number | undefined, fallback = DEFAULT
   return Math.max(1, Math.min(MAX_TERMINAL_HISTORY_LINES, Math.trunc(value)))
 }
 
+function clampSidebarWidthPercent(value: number | undefined, fallback = DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPercent) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(15, Math.min(50, Math.trunc(value)))
+}
+
+function clampSidebarWidthPixels(value: number | undefined, fallback = DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPixels) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(240, Math.min(960, Math.trunc(value)))
+}
+
 function normalizeTerminalText(value: string) {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
@@ -2852,6 +3367,10 @@ function isSidebarFontFamily(value: unknown): value is SidebarFontFamily {
 
 function isDefaultMapType(value: unknown): value is DefaultMapType {
   return value === 'graphic' || value === 'ascii'
+}
+
+function isSidebarWidthUnit(value: unknown): value is SidebarWidthUnit {
+  return value === 'percent' || value === 'pixels'
 }
 
 function normalizeDefaultMudId(value: string | undefined) {
@@ -2908,8 +3427,26 @@ function getCustomMudOptionLabel(settings: ClientSettings) {
   return name.length > 0 ? name : 'Custom'
 }
 
+function getVisibleSidebarTabs(layoutSettings: ClientSettings['layout']) {
+  return SIDEBAR_TABS.filter((tab) => layoutSettings.sidebarTabs[tab.id])
+}
+
+function getDefaultSidebarTab(settings: ClientSettings): SidebarTabId {
+  return getVisibleSidebarTabs(settings.layout)[0]?.id ?? 'character'
+}
+
+function getVisibleMapPanelTabs(layoutSettings: ClientSettings['layout']) {
+  return MAP_PANEL_TABS.filter((tab) => layoutSettings.mapPanels[tab.id])
+}
+
 function getDefaultMapPanelTab(settings: ClientSettings): MapPanelTabId {
-  return settings.minimap.defaultMapType === 'ascii' ? 'ascii' : 'graphic'
+  const preferredTab = settings.minimap.defaultMapType === 'ascii' ? 'ascii' : 'graphic'
+
+  if (settings.layout.mapPanels[preferredTab]) {
+    return preferredTab
+  }
+
+  return getVisibleMapPanelTabs(settings.layout)[0]?.id ?? preferredTab
 }
 
 function readChunkedCookie(name: string) {
