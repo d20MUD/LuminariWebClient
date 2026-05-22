@@ -966,14 +966,17 @@
 }
 
 .bars {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(7rem, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 0.35rem;
   padding: 0 1rem 1rem;
   min-width: 0;
 }
 
 .status-bar {
+  flex: 0 1 var(--status-bar-width, 24%);
+  width: min(100%, var(--status-bar-width, 24%));
+  max-width: 100%;
   min-width: 0;
 }
 
@@ -1530,7 +1533,12 @@
   }
 
   .bars {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.45rem;
+  }
+
+  .status-bar {
+    flex-basis: min(100%, max(48%, var(--status-bar-width, 24%)));
+    width: min(100%, max(48%, var(--status-bar-width, 24%)));
   }
 
   .group-resources {
@@ -1551,6 +1559,11 @@
 
   .connection-form button,
   .command-form button {
+    width: 100%;
+  }
+
+  .status-bar {
+    flex-basis: 100%;
     width: 100%;
   }
 

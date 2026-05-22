@@ -132,6 +132,7 @@ type BarConfig = {
   ariaLabel: string
   availabilityKind: 'present' | 'loading' | 'offline' | 'error' | 'unavailable'
   accentClass: string
+  widthValue: string
 }
 
 type SidebarTabId = 'character' | 'quests' | 'group' | 'affects'
@@ -139,6 +140,37 @@ type SidebarTabId = 'character' | 'quests' | 'group' | 'affects'
 type MapPanelTabId = 'graphic' | 'graphicLegend' | 'ascii' | 'asciiLegend'
 
 type SidebarWidthUnit = 'percent' | 'pixels'
+
+type GaugeId = 'health' | 'psp' | 'movement' | 'experience' | 'opponent' | 'tank'
+
+type StandardGaugeId = 'health' | 'psp' | 'movement' | 'experience'
+
+type CombatGaugeId = 'opponent' | 'tank'
+
+type GaugeVisibilityMode = 'never' | 'combat' | 'always'
+
+type GaugeSizeSettings = {
+  widthUnit: SidebarWidthUnit
+  widthPercent: number
+  widthPixels: number
+}
+
+type StandardGaugeSettings = GaugeSizeSettings & {
+  visible: boolean
+}
+
+type CombatGaugeSettings = GaugeSizeSettings & {
+  visibilityMode: GaugeVisibilityMode
+}
+
+type LayoutGaugeSettings = {
+  health: StandardGaugeSettings
+  psp: StandardGaugeSettings
+  movement: StandardGaugeSettings
+  experience: StandardGaugeSettings
+  opponent: CombatGaugeSettings
+  tank: CombatGaugeSettings
+}
 
 type PlayerInfoSectionId =
   | 'characterName'
@@ -201,6 +233,7 @@ type ClientSettings = {
     sidebarWidthUnit: SidebarWidthUnit
     sidebarWidthPercent: number
     sidebarWidthPixels: number
+    gauges: LayoutGaugeSettings
     mapPanels: Record<MapPanelTabId, boolean>
     sidebarTabs: Record<SidebarTabId, boolean>
     playerInfoSections: Record<PlayerInfoSectionId, boolean>
@@ -259,9 +292,36 @@ const DEFAULT_LAYOUT_PLAYER_INFO_SECTIONS: Record<PlayerInfoSectionId, boolean> 
   money: true,
 }
 
+const DEFAULT_LAYOUT_GAUGES: LayoutGaugeSettings = {
+  health: { visible: true, widthUnit: 'percent', widthPercent: 24, widthPixels: 220 },
+  psp: { visible: true, widthUnit: 'percent', widthPercent: 24, widthPixels: 220 },
+  movement: { visible: true, widthUnit: 'percent', widthPercent: 24, widthPixels: 220 },
+  experience: { visible: true, widthUnit: 'percent', widthPercent: 24, widthPixels: 220 },
+  opponent: { visibilityMode: 'combat', widthUnit: 'percent', widthPercent: 24, widthPixels: 220 },
+  tank: { visibilityMode: 'combat', widthUnit: 'percent', widthPercent: 24, widthPixels: 220 },
+}
+
 const SIDEBAR_WIDTH_UNIT_OPTIONS: Array<{ value: SidebarWidthUnit; label: string }> = [
   { value: 'percent', label: 'Percentage' },
   { value: 'pixels', label: 'Pixels' },
+]
+
+const STANDARD_GAUGE_OPTIONS: Array<{ id: StandardGaugeId; label: string }> = [
+  { id: 'health', label: 'Health gauge' },
+  { id: 'psp', label: 'PSP gauge' },
+  { id: 'movement', label: 'Movement gauge' },
+  { id: 'experience', label: 'Experience gauge' },
+]
+
+const COMBAT_GAUGE_OPTIONS: Array<{ id: CombatGaugeId; label: string }> = [
+  { id: 'opponent', label: 'Opponent health gauge' },
+  { id: 'tank', label: 'Tank health gauge' },
+]
+
+const GAUGE_VISIBILITY_MODE_OPTIONS: Array<{ value: GaugeVisibilityMode; label: string }> = [
+  { value: 'never', label: 'Never show' },
+  { value: 'combat', label: 'Show only in combat' },
+  { value: 'always', label: 'Show always' },
 ]
 
 const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
@@ -276,6 +336,14 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     sidebarWidthUnit: 'pixels',
     sidebarWidthPercent: 30,
     sidebarWidthPixels: 416,
+    gauges: {
+      health: { ...DEFAULT_LAYOUT_GAUGES.health },
+      psp: { ...DEFAULT_LAYOUT_GAUGES.psp },
+      movement: { ...DEFAULT_LAYOUT_GAUGES.movement },
+      experience: { ...DEFAULT_LAYOUT_GAUGES.experience },
+      opponent: { ...DEFAULT_LAYOUT_GAUGES.opponent },
+      tank: { ...DEFAULT_LAYOUT_GAUGES.tank },
+    },
     mapPanels: { ...DEFAULT_LAYOUT_MAP_PANELS },
     sidebarTabs: { ...DEFAULT_LAYOUT_SIDEBAR_TABS },
     playerInfoSections: { ...DEFAULT_LAYOUT_PLAYER_INFO_SECTIONS },
@@ -756,66 +824,96 @@ function App() {
 
   const bars = useMemo<BarConfig[]>(
     () => {
-      const baseBars = [
-        buildHudBar({
+      const nextBars: BarConfig[] = []
+      const combatGaugeDataAvailable = hasCombatGaugeData(mudState)
+
+      if (clientSettings.layout.gauges.health.visible) {
+        nextBars.push(
+          buildHudBar({
           id: 'health',
           status,
           label: 'HP',
           value: mudState.health,
           max: mudState.healthMax,
           accentClass: 'bar-health',
-        }),
-        buildHudBar({
+            widthValue: getGaugeWidthValue(clientSettings.layout.gauges.health),
+          }),
+        )
+      }
+
+      if (clientSettings.layout.gauges.psp.visible) {
+        nextBars.push(
+          buildHudBar({
           id: 'psp',
           status,
           label: 'PSP',
           value: mudState.psp,
           max: mudState.pspMax,
           accentClass: 'bar-psp',
-        }),
-        buildHudBar({
+            widthValue: getGaugeWidthValue(clientSettings.layout.gauges.psp),
+          }),
+        )
+      }
+
+      if (clientSettings.layout.gauges.movement.visible) {
+        nextBars.push(
+          buildHudBar({
           id: 'movement',
           status,
           label: 'Move',
           value: mudState.movement,
           max: mudState.movementMax,
           accentClass: 'bar-movement',
-        }),
-        buildHudBar({
+            widthValue: getGaugeWidthValue(clientSettings.layout.gauges.movement),
+          }),
+        )
+      }
+
+      if (clientSettings.layout.gauges.experience.visible) {
+        nextBars.push(
+          buildHudBar({
           id: 'experience',
           status,
           label: 'EXP',
           value: getExperienceProgress(mudState),
           max: mudState.experienceMax,
           accentClass: 'bar-exp',
-        }),
-      ]
-
-      if (!hasCombatGaugeData(mudState)) {
-        return baseBars
+            widthValue: getGaugeWidthValue(clientSettings.layout.gauges.experience),
+          }),
+        )
       }
 
-      return [
-        ...baseBars,
-        buildHudBar({
+      if (shouldRenderCombatGauge(clientSettings.layout.gauges.opponent.visibilityMode, combatGaugeDataAvailable)) {
+        nextBars.push(
+          buildHudBar({
           id: 'opponent',
           status,
           label: mudState.opponentName?.trim() || 'Opp',
           value: mudState.opponentHealth,
           max: mudState.opponentHealthMax,
           accentClass: 'bar-opponent',
-        }),
-        buildHudBar({
+            widthValue: getGaugeWidthValue(clientSettings.layout.gauges.opponent),
+          }),
+        )
+      }
+
+      if (shouldRenderCombatGauge(clientSettings.layout.gauges.tank.visibilityMode, combatGaugeDataAvailable)) {
+        nextBars.push(
+          buildHudBar({
           id: 'tank',
           status,
           label: mudState.tankName?.trim() || 'Tank',
           value: mudState.tankHealth,
           max: mudState.tankHealthMax,
           accentClass: 'bar-tank',
-        }),
-      ]
+            widthValue: getGaugeWidthValue(clientSettings.layout.gauges.tank),
+          }),
+        )
+      }
+
+      return nextBars
     },
-    [mudState, status],
+    [clientSettings.layout.gauges, mudState, status],
   )
 
   const canConnect = proxyReady && status !== 'connecting'
@@ -1350,6 +1448,48 @@ function App() {
     updateLayoutSettings({ sidebarWidthPixels: clampSidebarWidthPixels(sidebarWidthPixels) })
   }
 
+  function updateLayoutGaugeSettings(
+    gaugeId: GaugeId,
+    updates: Partial<StandardGaugeSettings & CombatGaugeSettings>,
+  ) {
+    setClientSettings((current) =>
+      normalizeClientSettings({
+        ...current,
+        layout: {
+          ...current.layout,
+          gauges: {
+            ...current.layout.gauges,
+            [gaugeId]: {
+              ...current.layout.gauges[gaugeId],
+              ...updates,
+            },
+          },
+        },
+      }),
+    )
+    setAutomationNotice(null)
+  }
+
+  function updateGaugeVisibility(gaugeId: StandardGaugeId, visible: boolean) {
+    updateLayoutGaugeSettings(gaugeId, { visible })
+  }
+
+  function updateCombatGaugeVisibilityMode(gaugeId: CombatGaugeId, visibilityMode: GaugeVisibilityMode) {
+    updateLayoutGaugeSettings(gaugeId, { visibilityMode })
+  }
+
+  function updateGaugeWidthUnit(gaugeId: GaugeId, widthUnit: SidebarWidthUnit) {
+    updateLayoutGaugeSettings(gaugeId, { widthUnit })
+  }
+
+  function updateGaugeWidthPercent(gaugeId: GaugeId, widthPercent: number) {
+    updateLayoutGaugeSettings(gaugeId, { widthPercent: clampGaugeWidthPercent(widthPercent) })
+  }
+
+  function updateGaugeWidthPixels(gaugeId: GaugeId, widthPixels: number) {
+    updateLayoutGaugeSettings(gaugeId, { widthPixels: clampGaugeWidthPixels(widthPixels) })
+  }
+
   function updateLayoutMapPanelVisibility(panelId: MapPanelTabId, visible: boolean) {
     setClientSettings((current) => ({
       ...current,
@@ -1397,6 +1537,20 @@ function App() {
       ...current,
       layout: {
         ...current.layout,
+        gauges: {
+          health: { ...current.layout.gauges.health, visible },
+          psp: { ...current.layout.gauges.psp, visible },
+          movement: { ...current.layout.gauges.movement, visible },
+          experience: { ...current.layout.gauges.experience, visible },
+          opponent: {
+            ...current.layout.gauges.opponent,
+            visibilityMode: visible ? 'combat' : 'never',
+          },
+          tank: {
+            ...current.layout.gauges.tank,
+            visibilityMode: visible ? 'combat' : 'never',
+          },
+        },
         mapPanels: {
           graphic: visible,
           graphicLegend: visible,
@@ -1930,6 +2084,183 @@ function App() {
 
                     <section className="settings-group">
                       <div className="settings-group-header">
+                        <h4>HUD gauges</h4>
+                        <p>Show or hide each gauge, control opponent and tank visibility rules, and size each bar in percent or pixels.</p>
+                      </div>
+
+                      <div className="automation-list">
+                        {STANDARD_GAUGE_OPTIONS.map((option) => {
+                          const gaugeSettings = clientSettings.layout.gauges[option.id]
+
+                          return (
+                            <div key={option.id} className="automation-item">
+                              <div className="automation-item-header">
+                                <strong>{option.label}</strong>
+
+                                <label className="automation-toggle">
+                                  <input
+                                    type="checkbox"
+                                    checked={gaugeSettings.visible}
+                                    onChange={(event) => updateGaugeVisibility(option.id, event.target.checked)}
+                                  />
+                                  <span>{gaugeSettings.visible ? 'Shown' : 'Hidden'}</span>
+                                </label>
+                              </div>
+
+                              <div className="settings-fields">
+                                <label>
+                                  <span>Width mode</span>
+                                  <select
+                                    value={gaugeSettings.widthUnit}
+                                    onChange={(event) => {
+                                      if (isSidebarWidthUnit(event.target.value)) {
+                                        updateGaugeWidthUnit(option.id, event.target.value)
+                                      }
+                                    }}
+                                  >
+                                    {SIDEBAR_WIDTH_UNIT_OPTIONS.map((widthOption) => (
+                                      <option key={widthOption.value} value={widthOption.value}>
+                                        {widthOption.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+
+                                <label>
+                                  <span>Percent width</span>
+                                  <input
+                                    type="number"
+                                    min={15}
+                                    max={100}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={gaugeSettings.widthPercent}
+                                    onChange={(event) => {
+                                      const nextValue = parsePositiveIntegerInput(event.target.value)
+                                      if (nextValue !== null) {
+                                        updateGaugeWidthPercent(option.id, nextValue)
+                                      }
+                                    }}
+                                  />
+                                </label>
+
+                                <label>
+                                  <span>Pixel width</span>
+                                  <input
+                                    type="number"
+                                    min={120}
+                                    max={960}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={gaugeSettings.widthPixels}
+                                    onChange={(event) => {
+                                      const nextValue = parsePositiveIntegerInput(event.target.value)
+                                      if (nextValue !== null) {
+                                        updateGaugeWidthPixels(option.id, nextValue)
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          )
+                        })}
+
+                        {COMBAT_GAUGE_OPTIONS.map((option) => {
+                          const gaugeSettings = clientSettings.layout.gauges[option.id]
+
+                          return (
+                            <div key={option.id} className="automation-item">
+                              <div className="automation-item-header">
+                                <div>
+                                  <strong>{option.label}</strong>
+                                  <p className="automation-menu-help">
+                                    Choose whether this bar stays hidden, appears only in combat, or stays visible all the time.
+                                  </p>
+                                </div>
+                              </div>
+
+                              <div className="settings-fields">
+                                <label>
+                                  <span>Visibility</span>
+                                  <select
+                                    value={gaugeSettings.visibilityMode}
+                                    onChange={(event) => {
+                                      if (isGaugeVisibilityMode(event.target.value)) {
+                                        updateCombatGaugeVisibilityMode(option.id, event.target.value)
+                                      }
+                                    }}
+                                  >
+                                    {GAUGE_VISIBILITY_MODE_OPTIONS.map((visibilityOption) => (
+                                      <option key={visibilityOption.value} value={visibilityOption.value}>
+                                        {visibilityOption.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+
+                                <label>
+                                  <span>Width mode</span>
+                                  <select
+                                    value={gaugeSettings.widthUnit}
+                                    onChange={(event) => {
+                                      if (isSidebarWidthUnit(event.target.value)) {
+                                        updateGaugeWidthUnit(option.id, event.target.value)
+                                      }
+                                    }}
+                                  >
+                                    {SIDEBAR_WIDTH_UNIT_OPTIONS.map((widthOption) => (
+                                      <option key={widthOption.value} value={widthOption.value}>
+                                        {widthOption.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+
+                                <label>
+                                  <span>Percent width</span>
+                                  <input
+                                    type="number"
+                                    min={15}
+                                    max={100}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={gaugeSettings.widthPercent}
+                                    onChange={(event) => {
+                                      const nextValue = parsePositiveIntegerInput(event.target.value)
+                                      if (nextValue !== null) {
+                                        updateGaugeWidthPercent(option.id, nextValue)
+                                      }
+                                    }}
+                                  />
+                                </label>
+
+                                <label>
+                                  <span>Pixel width</span>
+                                  <input
+                                    type="number"
+                                    min={120}
+                                    max={960}
+                                    step={1}
+                                    inputMode="numeric"
+                                    value={gaugeSettings.widthPixels}
+                                    onChange={(event) => {
+                                      const nextValue = parsePositiveIntegerInput(event.target.value)
+                                      if (nextValue !== null) {
+                                        updateGaugeWidthPixels(option.id, nextValue)
+                                      }
+                                    }}
+                                  />
+                                </label>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </section>
+
+                    <section className="settings-group">
+                      <div className="settings-group-header">
                         <h4>Map tabs</h4>
                         <p>Toggle the graphic and ASCII map tabs and their legends on or off.</p>
                       </div>
@@ -2369,7 +2700,7 @@ function App() {
             dangerouslySetInnerHTML={{ __html: terminalOutputHtml }}
           />
 
-          {isMinimalistMode ? null : (
+          {isMinimalistMode || bars.length === 0 ? null : (
             <div className="bars">
               {bars.map((bar) => (
                 <StatusBar key={bar.id} bar={bar} />
@@ -3028,6 +3359,7 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
 
   const terminalRecord = terminalValue as Record<string, unknown>
   const layoutRecord = isObjectRecord(record.layout) ? record.layout : null
+  const layoutGaugesRecord = isObjectRecord(layoutRecord?.gauges) ? layoutRecord.gauges : null
   const layoutMapPanelsRecord = isObjectRecord(layoutRecord?.mapPanels) ? layoutRecord.mapPanels : null
   const layoutSidebarTabsRecord = isObjectRecord(layoutRecord?.sidebarTabs) ? layoutRecord.sidebarTabs : null
   const layoutPlayerInfoSectionsRecord = isObjectRecord(layoutRecord?.playerInfoSections) ? layoutRecord.playerInfoSections : null
@@ -3057,6 +3389,14 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
         readNumericSetting(layoutRecord?.sidebarWidthPixels),
         DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPixels,
       ),
+      gauges: {
+        health: normalizeStandardGaugeSettings(layoutGaugesRecord?.health, DEFAULT_CLIENT_SETTINGS.layout.gauges.health),
+        psp: normalizeStandardGaugeSettings(layoutGaugesRecord?.psp, DEFAULT_CLIENT_SETTINGS.layout.gauges.psp),
+        movement: normalizeStandardGaugeSettings(layoutGaugesRecord?.movement, DEFAULT_CLIENT_SETTINGS.layout.gauges.movement),
+        experience: normalizeStandardGaugeSettings(layoutGaugesRecord?.experience, DEFAULT_CLIENT_SETTINGS.layout.gauges.experience),
+        opponent: normalizeCombatGaugeSettings(layoutGaugesRecord?.opponent, DEFAULT_CLIENT_SETTINGS.layout.gauges.opponent),
+        tank: normalizeCombatGaugeSettings(layoutGaugesRecord?.tank, DEFAULT_CLIENT_SETTINGS.layout.gauges.tank),
+      },
       mapPanels: {
         graphic:
           typeof layoutMapPanelsRecord?.graphic === 'boolean'
@@ -3332,6 +3672,22 @@ function clampSidebarWidthPixels(value: number | undefined, fallback = DEFAULT_C
   return Math.max(240, Math.min(960, Math.trunc(value)))
 }
 
+function clampGaugeWidthPercent(value: number | undefined, fallback = DEFAULT_LAYOUT_GAUGES.health.widthPercent) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(15, Math.min(100, Math.trunc(value)))
+}
+
+function clampGaugeWidthPixels(value: number | undefined, fallback = DEFAULT_LAYOUT_GAUGES.health.widthPixels) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(120, Math.min(960, Math.trunc(value)))
+}
+
 function normalizeTerminalText(value: string) {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
@@ -3371,6 +3727,32 @@ function isDefaultMapType(value: unknown): value is DefaultMapType {
 
 function isSidebarWidthUnit(value: unknown): value is SidebarWidthUnit {
   return value === 'percent' || value === 'pixels'
+}
+
+function isGaugeVisibilityMode(value: unknown): value is GaugeVisibilityMode {
+  return value === 'never' || value === 'combat' || value === 'always'
+}
+
+function normalizeStandardGaugeSettings(value: unknown, fallback: StandardGaugeSettings): StandardGaugeSettings {
+  const record = isObjectRecord(value) ? value : null
+
+  return {
+    visible: typeof record?.visible === 'boolean' ? record.visible : fallback.visible,
+    widthUnit: isSidebarWidthUnit(record?.widthUnit) ? record.widthUnit : fallback.widthUnit,
+    widthPercent: clampGaugeWidthPercent(readNumericSetting(record?.widthPercent), fallback.widthPercent),
+    widthPixels: clampGaugeWidthPixels(readNumericSetting(record?.widthPixels), fallback.widthPixels),
+  }
+}
+
+function normalizeCombatGaugeSettings(value: unknown, fallback: CombatGaugeSettings): CombatGaugeSettings {
+  const record = isObjectRecord(value) ? value : null
+
+  return {
+    visibilityMode: isGaugeVisibilityMode(record?.visibilityMode) ? record.visibilityMode : fallback.visibilityMode,
+    widthUnit: isSidebarWidthUnit(record?.widthUnit) ? record.widthUnit : fallback.widthUnit,
+    widthPercent: clampGaugeWidthPercent(readNumericSetting(record?.widthPercent), fallback.widthPercent),
+    widthPixels: clampGaugeWidthPixels(readNumericSetting(record?.widthPixels), fallback.widthPixels),
+  }
 }
 
 function normalizeDefaultMudId(value: string | undefined) {
@@ -3447,6 +3829,22 @@ function getDefaultMapPanelTab(settings: ClientSettings): MapPanelTabId {
   }
 
   return getVisibleMapPanelTabs(settings.layout)[0]?.id ?? preferredTab
+}
+
+function getGaugeWidthValue(settings: GaugeSizeSettings) {
+  return settings.widthUnit === 'percent' ? `${settings.widthPercent}%` : `${settings.widthPixels}px`
+}
+
+function shouldRenderCombatGauge(mode: GaugeVisibilityMode, combatGaugeDataAvailable: boolean) {
+  if (mode === 'never') {
+    return false
+  }
+
+  if (mode === 'always') {
+    return true
+  }
+
+  return combatGaugeDataAvailable
 }
 
 function readChunkedCookie(name: string) {
@@ -3590,7 +3988,14 @@ type StatusBarProps = {
 
 function StatusBar({ bar }: StatusBarProps) {
   return (
-    <div className="status-bar">
+    <div
+      className="status-bar"
+      style={
+        {
+          '--status-bar-width': bar.widthValue,
+        } as CSSProperties
+      }
+    >
       <div
         className={`bar-track bar-state-${bar.availabilityKind}`}
         role="meter"
@@ -4178,13 +4583,15 @@ function buildHudBar({
   value,
   max,
   accentClass,
+  widthValue,
 }: {
-  id: string
+  id: GaugeId
   status: ConnectionStatus
   label: string
   value?: number
   max?: number
   accentClass: string
+  widthValue: string
 }): BarConfig {
   const hasValue = value !== undefined && max !== undefined
   const safeMax = max && max > 0 ? max : 0
@@ -4201,6 +4608,7 @@ function buildHudBar({
     ariaLabel,
     availabilityKind,
     accentClass,
+    widthValue,
   }
 }
 
