@@ -887,7 +887,7 @@ function App() {
           id: 'experience',
           status,
           label: 'EXP',
-          value: getExperienceProgress(mudState),
+          value: getExperienceProgress(mudState, isStarWarsConnection),
           max: mudState.experienceMax,
           accentClass: 'bar-exp',
             widthValue: getGaugeWidthValue(clientSettings.layout.gauges.experience),
@@ -5276,9 +5276,16 @@ function formatSignedNumber(value: number | undefined) {
   return String(value)
 }
 
-function getExperienceProgress(mudState: MudState) {
+function getExperienceProgress(mudState: MudState, isStarWarsConnection: boolean) {
   if (mudState.experienceMax === undefined) {
     return undefined
+  }
+
+  // Star Wars supplies EXPERIENCE_TNL as experience earned in the current
+  // level (despite the inherited TNL variable name). Other MUDs use it as
+  // experience remaining, so preserve their existing calculation.
+  if (isStarWarsConnection) {
+    return mudState.experienceTnl ?? mudState.experience
   }
 
   if (mudState.experienceTnl === undefined) {
