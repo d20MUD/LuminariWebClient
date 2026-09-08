@@ -51,6 +51,7 @@ const WEB_CLIENT_NAME = 'LuminariWebClient'
 const WEB_CLIENT_VERSION = '0.1.0'
 const DEFAULT_COLUMNS = 120
 const DEFAULT_ROWS = 40
+const WEB_SOCKET_PING_INTERVAL_MS = 30_000
 const CONTROL_BYTES = new Set([
   MSDP_VAR,
   MSDP_VAL,
@@ -95,6 +96,11 @@ app.get(/^(?!\/ws).*/, (_request, response) => {
 
 wss.on('connection', (socket) => {
   const session = new MudSession(socket)
+  const heartbeat = setInterval(() => {
+    if (socket.readyState === WebSocket.OPEN) {
+      socket.ping()
+    }
+  }, WEB_SOCKET_PING_INTERVAL_MS)
 
   socket.on('message', (data) => {
     const message = parseClientMessage(data)
@@ -122,6 +128,7 @@ wss.on('connection', (socket) => {
   })
 
   socket.on('close', () => {
+    clearInterval(heartbeat)
     session.disconnect('Disconnected.')
   })
 })
