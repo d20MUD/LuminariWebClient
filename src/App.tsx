@@ -1,5 +1,5 @@
 import AnsiToHtml from 'ansi-to-html'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ChangeEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { ReactNode } from 'react'
 import { appSettings } from '../shared/app-settings.ts'
@@ -29,6 +29,7 @@ const CUSTOM_MUD_VALUE = '__custom__'
 const DEFAULT_TERMINAL_HISTORY_LINES = 200
 const MAX_TERMINAL_HISTORY_LINES = 2000
 const COMMAND_HISTORY_LIMIT = 100
+const TERMINAL_BOTTOM_SCROLL_TOLERANCE = 24
 const AUTOMATION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 const AUTOMATION_COOKIE_CHUNK_SIZE = 3000
 const AUTOMATION_RECURSION_LIMIT = 10
@@ -587,6 +588,7 @@ function App() {
   const [clientSettings, setClientSettings] = useState<ClientSettings>(initialClientSettings)
   const [automationNotice, setAutomationNotice] = useState<AutomationNotice | null>(null)
   const [terminalOutput, setTerminalOutput] = useState('Connect to a LuminariMUD-compatible server to begin.')
+  const [hasUnreadTerminalOutput, setHasUnreadTerminalOutput] = useState(false)
   const [proxyReady, setProxyReady] = useState(false)
   const [status, setStatus] = useState<ConnectionStatus>('idle')
   const [statusDetail, setStatusDetail] = useState('Awaiting connection.')
@@ -605,6 +607,7 @@ function App() {
   const triggersRef = useRef<TriggerDefinition[]>(triggers)
   const clientSettingsRef = useRef(clientSettings)
   const terminalHistoryLineLimitRef = useRef(clientSettings.terminal.maxHistoryLines)
+  const terminalShouldFollowOutputRef = useRef(true)
   const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
   const visibleSidebarTabs = useMemo(() => getVisibleSidebarTabs(clientSettings.layout), [clientSettings.layout])
 
@@ -702,7 +705,7 @@ function App() {
     if (!socket || socket.readyState !== WebSocket.OPEN) {
       statusRef.current = 'error'
       setStatus('error')
-      setStatusDetail('The local WebSocket proxy is unavailable.')
+      setStatusDetail('The local WebSocket proxy is unavailable. Please refresh the page.')
       setIsHeaderVisible(true)
       return
     }
@@ -763,7 +766,7 @@ function App() {
       setProxyReady(false)
       statusRef.current = 'error'
       setStatus('error')
-      setStatusDetail('The local WebSocket proxy is unavailable.')
+      setStatusDetail('The local WebSocket proxy is unavailable. Please refresh the page.')
       setIsHeaderVisible(true)
       triggerBufferRef.current = ''
     })
@@ -775,6 +778,13 @@ function App() {
       }
 
       if (message.type === 'terminal') {
+        const shouldFollowOutput =
+          clientSettingsRef.current.terminal.autoScroll && isTerminalScrolledToBottom(terminalRef.current)
+        terminalShouldFollowOutputRef.current = shouldFollowOutput
+        if (!shouldFollowOutput) {
+          setHasUnreadTerminalOutput(true)
+        }
+
         const triggerResult = consumeTriggerText(message.text, triggerBufferRef.current, triggersRef.current)
         triggerBufferRef.current = triggerResult.buffer
         for (const triggerCommand of triggerResult.commands) {
@@ -799,6 +809,8 @@ function App() {
 
         if (message.status === 'connected') {
           triggerBufferRef.current = ''
+          terminalShouldFollowOutputRef.current = true
+          setHasUnreadTerminalOutput(false)
           setTerminalOutput('Connected. Waiting for room text and MSDP updates...')
         } else {
           triggerBufferRef.current = ''
@@ -816,11 +828,14 @@ function App() {
     }
   }, [dispatchInputText])
 
-  useEffect(() => {
-    if (terminalRef.current && clientSettings.terminal.autoScroll) {
-      terminalRef.current.scrollTop = terminalRef.current.scrollHeight
+  useLayoutEffect(() => {
+    if (!terminalShouldFollowOutputRef.current) {
+      return
     }
-  }, [clientSettings.terminal.autoScroll, terminalOutput])
+
+    scrollTerminalElementToBottom(terminalRef.current)
+    setHasUnreadTerminalOutput(false)
+  }, [terminalOutput])
 
   const bars = useMemo<BarConfig[]>(
     () => {
@@ -1639,11 +1654,27 @@ function App() {
     }
   }
 
+  function handleTerminalScroll() {
+    const isAtBottom = isTerminalScrolledToBottom(terminalRef.current)
+    terminalShouldFollowOutputRef.current = isAtBottom
+
+    if (isAtBottom) {
+      setHasUnreadTerminalOutput(false)
+    }
+  }
+
   function handleTerminalClick(event: ReactMouseEvent<HTMLDivElement>) {
     if (!connected || event.button !== 0 || hasExpandedSelection()) {
       return
     }
 
+    focusCommandInput(commandInputRef.current)
+  }
+
+  function handleUnreadTerminalOutputClick() {
+    terminalShouldFollowOutputRef.current = true
+    scrollTerminalElementToBottom(terminalRef.current)
+    setHasUnreadTerminalOutput(false)
     focusCommandInput(commandInputRef.current)
   }
 
@@ -2492,7 +2523,7 @@ function App() {
                             checked={clientSettings.terminal.autoScroll}
                             onChange={(event) => updateTerminalSettings({ autoScroll: event.target.checked })}
                           />
-                          <span>Auto-scroll when new output arrives</span>
+                          <span>Follow new output when at bottom</span>
                         </label>
 
                         <label className="automation-toggle">
@@ -2691,14 +2722,29 @@ function App() {
 
       <main className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}`} style={layoutStyle}>
         <section className="terminal-column panel">
-          <div
-            ref={terminalRef}
-            className="terminal-output"
-            data-prevent-command-focus
-            onClick={handleTerminalClick}
-            style={terminalOutputStyle}
-            dangerouslySetInnerHTML={{ __html: terminalOutputHtml }}
-          />
+          <div className="terminal-output-shell">
+            <div
+              ref={terminalRef}
+              className="terminal-output"
+              data-prevent-command-focus
+              onClick={handleTerminalClick}
+              onScroll={handleTerminalScroll}
+              style={terminalOutputStyle}
+              dangerouslySetInnerHTML={{ __html: terminalOutputHtml }}
+            />
+
+            {hasUnreadTerminalOutput ? (
+              <button
+                type="button"
+                className="terminal-new-output-button"
+                data-prevent-command-focus
+                aria-label="New output available. Jump to latest output."
+                onClick={handleUnreadTerminalOutputClick}
+              >
+                New output
+              </button>
+            ) : null}
+          </div>
 
           {isMinimalistMode || bars.length === 0 ? null : (
             <div className="bars">
@@ -3690,6 +3736,22 @@ function clampGaugeWidthPixels(value: number | undefined, fallback = DEFAULT_LAY
 
 function normalizeTerminalText(value: string) {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
+function isTerminalScrolledToBottom(terminal: HTMLElement | null) {
+  if (!terminal) {
+    return true
+  }
+
+  return terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight <= TERMINAL_BOTTOM_SCROLL_TOLERANCE
+}
+
+function scrollTerminalElementToBottom(terminal: HTMLElement | null) {
+  if (!terminal) {
+    return
+  }
+
+  terminal.scrollTop = terminal.scrollHeight
 }
 
 function trimTerminalOutputLines(value: string, maxHistoryLines: number) {
@@ -5232,39 +5294,39 @@ type BuiltGraphicMap = {
 
 const GRAPHIC_MAP_SECTOR_COLORS: Record<number, string> = {
   0: '#6b7280',
-  1: '#93c5fd',
+  1: '#bfbfbf',
   2: '#84cc16',
   3: '#166534',
   4: '#a16207',
-  5: '#78716c',
-  6: '#6b7280',
-  7: '#0f766e',
-  8: '#0369a1',
-  9: '#b45309',
+  5: '#940000',
+  6: '#6992e2',
+  7: '#0950dc',
+  8: '#ffffff',
+  9: '#090fb3',
   10: '#dc2626',
-  11: '#d1d5db',
-  12: '#d1d5db',
-  13: '#d1d5db',
-  14: '#0f766e',
+  11: '#feb44d',
+  12: '#feb44d',
+  13: '#feb44d',
+  14: '#dee137',
   15: '#155e75',
-  16: '#3b82f6',
-  17: '#a3e635',
-  18: '#a3e635',
-  19: '#4ade80',
-  20: '#f59e0b',
-  21: '#4d7c0f',
-  22: '#dc2626',
+  16: '#9544ca',
+  17: '#610000',
+  18: '#390080',
+  19: '#a05713',
+  20: '#9e9e9e',
+  21: '#575757',
+  22: '#4f5dc4',
   23: '#475569',
   24: '#dc2626',
-  25: '#c2410c',
+  25: '#ac2f2f',
   26: '#b91c1c',
   27: '#d2b48c',
   28: '#a3a3a3',
-  29: '#f8fafc',
-  30: '#64748b',
-  31: '#14532d',
+  29: '#545454',
+  30: '#2b7a00',
+  31: '#c5e0e7',
   32: '#65a30d',
-  33: '#fbbf24',
+  33: '#fee9b4',
   34: '#991b1b',
   35: '#52525b',
   36: '#0891b2',

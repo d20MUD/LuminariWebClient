@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Graphic Map Sector Colors</title>
+    <style>
+      :root {
+        --page-bg: #f4efe4;
+        --panel-bg: rgba(255, 251, 245, 0.86);
+        --panel-border: rgba(73, 52, 35, 0.14);
+        --text: #2e2218;
+        --muted: #705746;
+        --accent: #0f766e;
+        --accent-strong: #7c2d12;
+        --shadow: 0 24px 60px rgba(56, 35, 17, 0.12);
+        --swatch-size: 3.5rem;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(34, 197, 94, 0.18), transparent 28%),
+          radial-gradient(circle at top right, rgba(14, 116, 144, 0.18), transparent 26%),
+          linear-gradient(180deg, #fbf7ef 0%, #efe3ce 100%);
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 2rem));
+        margin: 0 auto;
+        padding: 2rem 0 3rem;
+      }
+
+      .hero,
+      .controls,
+      .table-shell {
+        background: var(--panel-bg);
+        border: 1px solid var(--panel-border);
+        border-radius: 24px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(14px);
+      }
+
+      .hero {
+        overflow: hidden;
+        position: relative;
+        padding: 2rem;
+      }
+
+      .hero::after {
+        content: "";
+        position: absolute;
+        inset: auto -4rem -4rem auto;
+        width: 18rem;
+        height: 18rem;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(124, 45, 18, 0.18), transparent 68%);
+        pointer-events: none;
+      }
+
+      h1 {
+        margin: 0 0 0.6rem;
+        font-size: clamp(2rem, 4vw, 3rem);
+        line-height: 1.05;
+        letter-spacing: 0.02em;
+      }
+
+      .lede {
+        margin: 0;
+        max-width: 56rem;
+        font-size: 1.05rem;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      .hero-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1.25rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.55rem 0.8rem;
+        border-radius: 999px;
+        border: 1px solid rgba(115, 83, 57, 0.18);
+        background: rgba(255, 255, 255, 0.62);
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 1.25rem;
+        padding: 1rem 1.25rem;
+      }
+
+      .controls-left,
+      .controls-right {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.75rem;
+      }
+
+      label {
+        font-weight: 600;
+      }
+
+      input[type="search"] {
+        width: min(22rem, 75vw);
+        padding: 0.8rem 0.95rem;
+        border-radius: 14px;
+        border: 1px solid rgba(115, 83, 57, 0.2);
+        background: rgba(255, 255, 255, 0.88);
+        color: var(--text);
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        border-radius: 14px;
+        padding: 0.8rem 1rem;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+        transition: transform 120ms ease, filter 120ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        filter: brightness(1.04);
+      }
+
+      .button-primary {
+        background: var(--accent);
+        color: #f8fffe;
+      }
+
+      .button-secondary {
+        background: rgba(124, 45, 18, 0.12);
+        color: var(--accent-strong);
+      }
+
+      .table-shell {
+        margin-top: 1.25rem;
+        overflow: hidden;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      thead {
+        background: rgba(124, 45, 18, 0.08);
+      }
+
+      th,
+      td {
+        padding: 1rem;
+        vertical-align: middle;
+        text-align: left;
+        border-bottom: 1px solid rgba(115, 83, 57, 0.12);
+      }
+
+      th {
+        font-size: 0.88rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--muted);
+      }
+
+      tbody tr {
+        transition: background 140ms ease;
+      }
+
+      tbody tr:hover {
+        background: rgba(255, 255, 255, 0.52);
+      }
+
+      .sector-id {
+        font-family: "Courier New", monospace;
+        font-weight: 700;
+        color: var(--accent-strong);
+      }
+
+      .sector-name {
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .sector-detail {
+        display: block;
+        margin-top: 0.25rem;
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.45;
+      }
+
+      .swatch-stack {
+        display: flex;
+        align-items: center;
+        gap: 0.85rem;
+      }
+
+      .swatch {
+        width: var(--swatch-size);
+        height: var(--swatch-size);
+        border-radius: 18px;
+        border: 1px solid rgba(34, 24, 15, 0.14);
+        box-shadow:
+          inset 0 0 0 1px rgba(255, 255, 255, 0.35),
+          0 10px 20px rgba(34, 24, 15, 0.12);
+        background-image:
+          linear-gradient(135deg, rgba(255, 255, 255, 0.32), transparent 52%),
+          linear-gradient(180deg, rgba(0, 0, 0, 0.06), transparent 40%);
+      }
+
+      .swatch-code,
+      .default-code {
+        font-family: "Courier New", monospace;
+        font-size: 0.95rem;
+      }
+
+      .picker-cell {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+      }
+
+      .picker {
+        width: 4.25rem;
+        height: 2.8rem;
+        padding: 0.2rem;
+        border: 1px solid rgba(115, 83, 57, 0.2);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.82);
+        cursor: pointer;
+      }
+
+      .hex-input {
+        width: 8.5rem;
+        padding: 0.75rem 0.8rem;
+        border-radius: 12px;
+        border: 1px solid rgba(115, 83, 57, 0.2);
+        background: rgba(255, 255, 255, 0.88);
+        color: var(--text);
+        font: inherit;
+        font-family: "Courier New", monospace;
+      }
+
+      .row-reset {
+        padding: 0.72rem 0.9rem;
+      }
+
+      .footer-note {
+        padding: 1rem 1.25rem 1.3rem;
+        color: var(--muted);
+        font-size: 0.93rem;
+        line-height: 1.55;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      @media (max-width: 920px) {
+        .table-shell {
+          overflow-x: auto;
+        }
+
+        table {
+          min-width: 980px;
+        }
+      }
+
+      @media (max-width: 640px) {
+        main {
+          width: min(100vw - 1rem, 100%);
+          padding: 0.5rem 0 1.5rem;
+        }
+
+        .hero,
+        .controls,
+        .table-shell {
+          border-radius: 18px;
+        }
+
+        .hero,
+        .controls {
+          padding-left: 1rem;
+          padding-right: 1rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <h1>Graphic Map Sector Colors</h1>
+        <p class="lede">
+          This page mirrors the current sector color table used by the client graphic map. Each row shows the default
+          sector color, a live swatch, and a color picker so you can test replacements without editing application code.
+        </p>
+        <div class="hero-meta">
+          <span class="pill"><strong>37</strong> configured sectors</span>
+          <span class="pill">Source: GRAPHIC_MAP_SECTOR_COLORS and GRAPHIC_MAP_LEGEND_ITEMS</span>
+          <span class="pill">Open this file directly or through the Vite dev server</span>
+        </div>
+      </section>
+
+      <section class="controls">
+        <div class="controls-left">
+          <label for="sector-filter">Filter sectors</label>
+          <input id="sector-filter" type="search" placeholder="Search by name, detail, or sector number" />
+        </div>
+        <div class="controls-right">
+          <button id="reset-all" class="button-secondary" type="button">Reset all colors</button>
+          <button id="randomize-all" class="button-primary" type="button">Randomize all</button>
+          <button id="download-text" class="button-secondary" type="button">Download text file</button>
+        </div>
+      </section>
+
+      <section class="table-shell">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Sector</th>
+              <th scope="col">Type</th>
+              <th scope="col">Default hex</th>
+              <th scope="col">Live preview</th>
+              <th scope="col">Test color</th>
+            </tr>
+          </thead>
+          <tbody id="sector-table"></tbody>
+        </table>
+        <div class="footer-note">
+          Some sectors appear in the client color table but do not currently have a named legend entry in the app UI.
+          Those rows are labeled as unnamed sectors here so every configured color remains editable.
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const sectors = [
+        { sector: 0, label: 'Inside', detail: 'Standard indoor room sector.', color: '#6b7280' },
+        { sector: 1, label: 'City', detail: 'City streets and plazas.', color: '#bfbfbf' },
+        { sector: 2, label: 'Field', detail: 'Open plains and fields.', color: '#84cc16' },
+        { sector: 3, label: 'Forest', detail: 'Wooded terrain.', color: '#166534' },
+        { sector: 4, label: 'Hills', detail: 'Rolling hills.', color: '#a16207' },
+        { sector: 5, label: 'Mountain', detail: 'Mountain terrain.', color: '#940000' },
+        { sector: 6, label: 'Water', detail: 'Swimmable water.', color: '#6992e2' },
+        { sector: 7, label: 'Deep water', detail: 'Water that cannot be crossed normally.', color: '#0950dc' },
+        { sector: 8, label: 'Air', detail: 'Open air or flying terrain.', color: '#ffffff' },
+        { sector: 9, label: 'Underwater', detail: 'Submerged rooms.', color: '#090fb3' },
+        { sector: 10, label: 'Unnamed sector 10', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#dc2626' },
+        { sector: 11, label: 'Road', detail: 'Road segments and intersections.', color: '#feb44d' },
+        { sector: 12, label: 'Unnamed sector 12', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#feb44d' },
+        { sector: 13, label: 'Unnamed sector 13', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#feb44d' },
+        { sector: 14, label: 'Desert', detail: 'Dry desert terrain.', color: '#dee137' },
+        { sector: 15, label: 'Ocean', detail: 'Open ocean water.', color: '#155e75' },
+        { sector: 16, label: 'Marsh', detail: 'Wetlands and bogs.', color: '#9544ca' },
+        { sector: 17, label: 'High mountain', detail: 'High, difficult peaks.', color: '#610000' },
+        { sector: 18, label: 'Planes', detail: 'Extraplanar terrain.', color: '#390080' },
+        { sector: 19, label: 'Underdark wilds', detail: 'Underground wilderness.', color: '#a05713' },
+        { sector: 20, label: 'Underdark city', detail: 'Underground settlements.', color: '#9e9e9e' },
+        { sector: 21, label: 'Underdark inside', detail: 'Underground interior rooms.', color: '#575757' },
+        { sector: 22, label: 'Underdark water', detail: 'Underground swimmable water.', color: '#4f5dc4' },
+        { sector: 23, label: 'Unnamed sector 23', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#475569' },
+        { sector: 24, label: 'Unnamed sector 24', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#dc2626' },
+        { sector: 25, label: 'Lava', detail: 'Hazardous lava terrain.', color: '#ac2f2f' },
+        { sector: 26, label: 'Unnamed sector 26', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#b91c1c' },
+        { sector: 27, label: 'Unnamed sector 27', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#d2b48c' },
+        { sector: 28, label: 'Unnamed sector 28', detail: 'Configured in GRAPHIC_MAP_SECTOR_COLORS but not named in the app legend.', color: '#a3a3a3' },
+        { sector: 29, label: 'Cave', detail: 'Natural cave rooms.', color: '#545454' },
+        { sector: 30, label: 'Jungle', detail: 'Dense jungle terrain.', color: '#2b7a00' },
+        { sector: 31, label: 'Tundra', detail: 'Frozen plains.', color: '#c5e0e7' },
+        { sector: 32, label: 'Taiga', detail: 'Cold evergreen forest.', color: '#65a30d' },
+        { sector: 33, label: 'Beach', detail: 'Coastal shorelines.', color: '#fee9b4' },
+        { sector: 34, label: 'Seaport', detail: 'Harbor or port room.', color: '#991b1b' },
+        { sector: 35, label: 'Inside room', detail: 'Special indoor-room sector.', color: '#52525b' },
+        { sector: 36, label: 'River', detail: 'Flowing river water.', color: '#0891b2' },
+      ]
+
+      const sectorTable = document.getElementById('sector-table')
+      const filterInput = document.getElementById('sector-filter')
+      const resetAllButton = document.getElementById('reset-all')
+      const randomizeAllButton = document.getElementById('randomize-all')
+      const downloadTextButton = document.getElementById('download-text')
+
+      function createRow(item) {
+        const row = document.createElement('tr')
+        row.dataset.search = `${item.sector} ${item.label} ${item.detail}`.toLowerCase()
+
+        row.innerHTML = `
+          <td><span class="sector-id">${item.sector}</span></td>
+          <td>
+            <span class="sector-name">${item.label}</span>
+            <span class="sector-detail">${item.detail}</span>
+          </td>
+          <td><span class="default-code">${item.color.toUpperCase()}</span></td>
+          <td>
+            <div class="swatch-stack">
+              <div class="swatch" aria-hidden="true"></div>
+              <span class="swatch-code"></span>
+            </div>
+          </td>
+          <td>
+            <div class="picker-cell">
+              <input class="picker" type="color" aria-label="Choose color for sector ${item.sector} ${item.label}" />
+              <input class="hex-input" type="text" inputmode="text" aria-label="Hex color for sector ${item.sector} ${item.label}" />
+              <button class="button-secondary row-reset" type="button">Reset</button>
+            </div>
+          </td>
+        `
+
+        const swatch = row.querySelector('.swatch')
+        const swatchCode = row.querySelector('.swatch-code')
+        const picker = row.querySelector('.picker')
+        const hexInput = row.querySelector('.hex-input')
+        const resetButton = row.querySelector('.row-reset')
+
+        function applyColor(nextColor) {
+          item.currentColor = nextColor
+          swatch.style.backgroundColor = nextColor
+          picker.value = nextColor
+          hexInput.value = nextColor.toUpperCase()
+          swatchCode.textContent = nextColor.toUpperCase()
+        }
+
+        function normalizeHex(value) {
+          const trimmed = value.trim()
+          if (/^#[0-9a-fA-F]{6}$/.test(trimmed)) {
+            return trimmed.toLowerCase()
+          }
+
+          if (/^#[0-9a-fA-F]{3}$/.test(trimmed)) {
+            return `#${trimmed[1]}${trimmed[1]}${trimmed[2]}${trimmed[2]}${trimmed[3]}${trimmed[3]}`.toLowerCase()
+          }
+
+          return null
+        }
+
+        picker.addEventListener('input', () => applyColor(picker.value))
+
+        hexInput.addEventListener('change', () => {
+          const normalized = normalizeHex(hexInput.value)
+          if (normalized) {
+            applyColor(normalized)
+            hexInput.setCustomValidity('')
+            return
+          }
+
+          hexInput.setCustomValidity('Use a hex color like #84cc16 or #8c1.')
+          hexInput.reportValidity()
+          applyColor(picker.value)
+        })
+
+        resetButton.addEventListener('click', () => applyColor(item.color))
+
+        applyColor(item.color)
+        return row
+      }
+
+      function renderRows() {
+        const fragment = document.createDocumentFragment()
+        sectors.forEach((item) => fragment.appendChild(createRow(item)))
+        sectorTable.appendChild(fragment)
+      }
+
+      function applyFilter() {
+        const query = filterInput.value.trim().toLowerCase()
+        const rows = sectorTable.querySelectorAll('tr')
+        rows.forEach((row) => {
+          const matches = query === '' || row.dataset.search.includes(query)
+          row.classList.toggle('hidden', !matches)
+        })
+      }
+
+      function randomHexColor() {
+        return `#${Math.floor(Math.random() * 0xffffff)
+          .toString(16)
+          .padStart(6, '0')}`
+      }
+
+      function buildExportText() {
+        return sectors
+          .map((item) => `${item.label}: ${(item.currentColor ?? item.color).toUpperCase()}`)
+          .join('\n')
+      }
+
+      function downloadColorTextFile() {
+        const blob = new Blob([buildExportText()], { type: 'text/plain;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+
+        link.href = url
+        link.download = 'graphic-map-sector-colors.txt'
+        document.body.appendChild(link)
+        link.click()
+        link.remove()
+        URL.revokeObjectURL(url)
+      }
+
+      renderRows()
+
+      filterInput.addEventListener('input', applyFilter)
+
+      resetAllButton.addEventListener('click', () => {
+        sectorTable.querySelectorAll('tr').forEach((row, index) => {
+          const picker = row.querySelector('.picker')
+          picker.value = sectors[index].color
+          picker.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+      })
+
+      randomizeAllButton.addEventListener('click', () => {
+        sectorTable.querySelectorAll('.picker').forEach((picker) => {
+          picker.value = randomHexColor()
+          picker.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+      })
+
+      downloadTextButton.addEventListener('click', downloadColorTextFile)
+    </script>
+  </body>
+</html>

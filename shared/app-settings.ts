@@ -69,7 +69,6 @@ export const appSettings: AppSettings = {
     browserTitle: 'd20MUD Web Clients',
     eyebrow: '',
     title: 'd20MUD Web Clients',
-    subtitle:
-      '',
+    subtitle: 'by GickerLDS aka Steve Squires copyright 2026',
   },
 }

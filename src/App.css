@@ -182,6 +182,13 @@
   overflow: hidden;
 }
 
+.terminal-output-shell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
 .panel-header {
   display: flex;
   justify-content: space-between;
@@ -212,6 +219,24 @@
   white-space: pre-wrap;
   word-break: break-word;
   user-select: text;
+}
+
+.terminal-new-output-button {
+  position: absolute;
+  right: 1.65rem;
+  bottom: 1.65rem;
+  z-index: 2;
+  min-height: 1.65rem;
+  max-width: calc(100% - 3.3rem);
+  padding: 0.25rem 0.55rem;
+  border-color: rgba(96, 165, 250, 0.58);
+  border-radius: 0.45rem;
+  background: rgba(15, 23, 42, 0.94);
+  box-shadow: 0 0.45rem 1.25rem rgba(2, 6, 23, 0.38);
+  color: var(--terminal-text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .terminal-muted {
@@ -1407,8 +1432,8 @@
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 0.08rem;
-  padding: 0.08rem;
+  gap: 0.05rem;
+  padding: 0.05rem;
 }
 
 .graphic-map-marker {
@@ -1417,7 +1442,7 @@
   justify-content: center;
   min-width: 0;
   color: #f8fafc;
-  font-size: clamp(0.32rem, 0.9vw, 0.72rem);
+  font-size: clamp(0.24rem, 0.68vw, 0.56rem);
   font-weight: 800;
   line-height: 1;
   text-shadow: 0 1px 2px rgba(15, 23, 42, 0.92);
