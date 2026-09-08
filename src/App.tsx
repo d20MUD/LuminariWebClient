@@ -895,14 +895,6 @@ function App() {
         )
       }
 
-      if (isStarWarsConnection && mudState.bacta !== undefined) {
-        nextBars.push(buildResourceHudBar('bacta', status, 'Bacta', mudState.bacta, 'bar-bacta'))
-      }
-
-      if (isStarWarsConnection && mudState.powerCells !== undefined) {
-        nextBars.push(buildResourceHudBar('power-cells', status, 'Power Cells', mudState.powerCells, 'bar-power-cells'))
-      }
-
       if (shouldRenderCombatGauge(clientSettings.layout.gauges.opponent.visibilityMode, opponentGaugeDataAvailable)) {
         nextBars.push(
           buildHudBar({
@@ -2721,11 +2713,14 @@ function App() {
           />
 
           {isMinimalistMode || bars.length === 0 ? null : (
-            <div className="bars">
-              {bars.map((bar) => (
-                <StatusBar key={bar.id} bar={bar} />
-              ))}
-            </div>
+            <>
+              {isStarWarsConnection ? <StarWarsResourceInfo mudState={mudState} /> : null}
+              <div className="bars">
+                {bars.map((bar) => (
+                  <StatusBar key={bar.id} bar={bar} />
+                ))}
+              </div>
+            </>
           )}
 
           <form className="command-form" onSubmit={handleCommandSubmit}>
@@ -4040,6 +4035,32 @@ function StatusBar({ bar }: StatusBarProps) {
   )
 }
 
+function StarWarsResourceInfo({ mudState }: { mudState: MudState }) {
+  const resources = [
+    { label: 'Bacta', value: formatInfoNumber(mudState.bacta) },
+    { label: 'Power cells', value: formatInfoNumber(mudState.powerCells) },
+    {
+      label: 'Main ammo',
+      value: formatWeaponAmmo(mudState.ammoMainType, mudState.ammoMain, mudState.ammoMainMax),
+    },
+    {
+      label: 'Offhand ammo',
+      value: formatWeaponAmmo(mudState.ammoOffhandType, mudState.ammoOffhand, mudState.ammoOffhandMax),
+    },
+  ]
+
+  return (
+    <div className="star-wars-resource-info" aria-label="Star Wars resources">
+      {resources.map((resource) => (
+        <div className="star-wars-resource-info-item" key={resource.label}>
+          <span className="star-wars-resource-info-label">{resource.label}</span>
+          <strong className="star-wars-resource-info-value">{resource.value}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 type StatProps = {
   label: string
   value?: string | number
@@ -4693,28 +4714,6 @@ function buildHudBar({
   }
 }
 
-function buildResourceHudBar(
-  id: string,
-  status: ConnectionStatus,
-  label: string,
-  value: number,
-  accentClass: string,
-): BarConfig {
-  const available = Number.isFinite(value)
-  const valueText = available ? formatNumber(value) ?? String(value) : getHudBarFallbackText(getHudBarAvailabilityKind(status, false))
-
-  return {
-    id,
-    label,
-    valueText,
-    percentage: available ? 100 : 0,
-    ariaLabel: `${label} ${valueText}`,
-    availabilityKind: getHudBarAvailabilityKind(status, available),
-    accentClass,
-    widthValue: '24%',
-  }
-}
-
 function getHudBarAvailabilityKind(
   status: ConnectionStatus,
   hasValue: boolean,
@@ -5262,6 +5261,19 @@ function parseServerMessage(data: unknown): ServerMessage | null {
 
 function formatNumber(value: number | undefined) {
   return value === undefined ? undefined : new Intl.NumberFormat().format(value)
+}
+
+function formatInfoNumber(value: number | undefined) {
+  return formatNumber(value) ?? '—'
+}
+
+function formatWeaponAmmo(type: string | undefined, current: number | undefined, max: number | undefined) {
+  const normalizedType = type?.trim()
+  if (!normalizedType && current === undefined && max === undefined) {
+    return 'None'
+  }
+
+  return `${normalizedType ? formatMudLabel(normalizedType) : 'Unknown'} ${formatInfoNumber(current)}/${formatInfoNumber(max)}`
 }
 
 function formatSignedNumber(value: number | undefined) {

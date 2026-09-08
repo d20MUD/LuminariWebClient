@@ -1013,6 +1013,24 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
     case 'powerCells':
       partial.powerCells = toOptionalNumber(value)
       break
+    case 'ammoMain':
+      partial.ammoMain = toOptionalNumber(value)
+      break
+    case 'ammoMainMax':
+      partial.ammoMainMax = toOptionalNumber(value)
+      break
+    case 'ammoMainType':
+      partial.ammoMainType = toOptionalString(value)
+      break
+    case 'ammoOffhand':
+      partial.ammoOffhand = toOptionalNumber(value)
+      break
+    case 'ammoOffhandMax':
+      partial.ammoOffhandMax = toOptionalNumber(value)
+      break
+    case 'ammoOffhandType':
+      partial.ammoOffhandType = toOptionalString(value)
+      break
     default:
       break
   }

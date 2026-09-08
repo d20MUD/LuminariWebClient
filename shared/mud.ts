@@ -103,6 +103,12 @@ export interface MudState {
   tankHealthMax?: number
   bacta?: number
   powerCells?: number
+  ammoMain?: number
+  ammoMainMax?: number
+  ammoMainType?: string
+  ammoOffhand?: number
+  ammoOffhandMax?: number
+  ammoOffhandType?: string
 }
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -152,9 +158,25 @@ export const defaultMsdpVariables = {
   tankHealthMax: 'TANK_HEALTH_MAX',
   bacta: 'BACTA',
   powerCells: 'POWER_CELLS',
+  ammoMain: 'AMMO_MAIN',
+  ammoMainMax: 'AMMO_MAIN_MAX',
+  ammoMainType: 'AMMO_MAIN_TYPE',
+  ammoOffhand: 'AMMO_OFFHAND',
+  ammoOffhandMax: 'AMMO_OFFHAND_MAX',
+  ammoOffhandType: 'AMMO_OFFHAND_TYPE',
 } as const
 
-export const starWarsMsdpVariableKeys = ['cooldowns', 'bacta', 'powerCells'] as const
+export const starWarsMsdpVariableKeys = [
+  'cooldowns',
+  'bacta',
+  'powerCells',
+  'ammoMain',
+  'ammoMainMax',
+  'ammoMainType',
+  'ammoOffhand',
+  'ammoOffhandMax',
+  'ammoOffhandType',
+] as const
 
 type MovementCommandDefinition = {
   command: string
@@ -242,6 +264,12 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     tankHealthMax: normalizeMsdpVariableValue(raw.tankHealthMax, defaultMsdpVariables.tankHealthMax),
     bacta: normalizeMsdpVariableValue(raw.bacta, defaultMsdpVariables.bacta),
     powerCells: normalizeMsdpVariableValue(raw.powerCells, defaultMsdpVariables.powerCells),
+    ammoMain: normalizeMsdpVariableValue(raw.ammoMain, defaultMsdpVariables.ammoMain),
+    ammoMainMax: normalizeMsdpVariableValue(raw.ammoMainMax, defaultMsdpVariables.ammoMainMax),
+    ammoMainType: normalizeMsdpVariableValue(raw.ammoMainType, defaultMsdpVariables.ammoMainType),
+    ammoOffhand: normalizeMsdpVariableValue(raw.ammoOffhand, defaultMsdpVariables.ammoOffhand),
+    ammoOffhandMax: normalizeMsdpVariableValue(raw.ammoOffhandMax, defaultMsdpVariables.ammoOffhandMax),
+    ammoOffhandType: normalizeMsdpVariableValue(raw.ammoOffhandType, defaultMsdpVariables.ammoOffhandType),
   }
 }
 

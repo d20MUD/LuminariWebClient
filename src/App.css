@@ -1019,6 +1019,45 @@
   min-width: 0;
 }
 
+.star-wars-resource-info {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin: 0 1rem 0.35rem;
+  padding: 0.42rem 0.55rem;
+  border: 1px solid rgba(96, 165, 250, 0.22);
+  border-radius: 0.55rem;
+  background: rgba(15, 23, 42, 0.58);
+}
+
+.star-wars-resource-info-item {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.star-wars-resource-info-label {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.star-wars-resource-info-value {
+  min-width: 0;
+  overflow: hidden;
+  color: #f8fafc;
+  font-size: 0.76rem;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-bar {
   flex: 0 1 var(--status-bar-width, 24%);
   width: min(100%, var(--status-bar-width, 24%));
@@ -1079,14 +1118,6 @@
 
 .bar-psp {
   background: linear-gradient(90deg, #2563eb, #60a5fa);
-}
-
-.bar-bacta {
-  background: linear-gradient(90deg, #0891b2, #22d3ee);
-}
-
-.bar-power-cells {
-  background: linear-gradient(90deg, #7c3aed, #c084fc);
 }
 
 .bar-movement {
@@ -1597,6 +1628,10 @@
 
   .bars {
     gap: 0.45rem;
+  }
+
+  .star-wars-resource-info {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .status-bar {
