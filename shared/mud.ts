@@ -71,6 +71,7 @@ export interface MudState {
   alignment?: string
   practice?: number
   money?: number
+  bank?: number
   position?: string
   room?: MudValue
   roomName?: string
@@ -91,6 +92,7 @@ export interface MudState {
   worldTime?: string
   actions?: MudValue
   affects?: MudValue
+  cooldowns?: MudValue
   group?: MudValue
   questInfo?: MudValue
   opponentName?: string
@@ -99,6 +101,8 @@ export interface MudState {
   tankName?: string
   tankHealth?: number
   tankHealthMax?: number
+  bacta?: number
+  powerCells?: number
 }
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -132,10 +136,12 @@ export const defaultMsdpVariables = {
   armorClass: 'AC',
   alignment: 'ALIGNMENT',
   money: 'MONEY',
+  bank: 'BANK',
   minimap: 'MINIMAP',
   graphicMap: 'GRAPHIC_MAP',
   wildernessGraphicMap: 'WILDERNESS_GRAPHIC_MAP',
   affects: 'AFFECTS',
+  cooldowns: 'COOLDOWNS',
   group: 'GROUP',
   questInfo: 'QUEST_INFO',
   opponentName: 'OPPONENT_NAME',
@@ -144,7 +150,11 @@ export const defaultMsdpVariables = {
   tankName: 'TANK_NAME',
   tankHealth: 'TANK_HEALTH',
   tankHealthMax: 'TANK_HEALTH_MAX',
+  bacta: 'BACTA',
+  powerCells: 'POWER_CELLS',
 } as const
+
+export const starWarsMsdpVariableKeys = ['cooldowns', 'bacta', 'powerCells'] as const
 
 type MovementCommandDefinition = {
   command: string
@@ -213,6 +223,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     armorClass: normalizeMsdpVariableValue(raw.armorClass, defaultMsdpVariables.armorClass),
     alignment: normalizeMsdpVariableValue(raw.alignment, defaultMsdpVariables.alignment),
     money: normalizeMsdpVariableValue(raw.money, defaultMsdpVariables.money),
+    bank: normalizeMsdpVariableValue(raw.bank, defaultMsdpVariables.bank),
     minimap: normalizeMsdpVariableValue(raw.minimap, defaultMsdpVariables.minimap),
     graphicMap: normalizeMsdpVariableValue(raw.graphicMap, defaultMsdpVariables.graphicMap),
     wildernessGraphicMap: normalizeMsdpVariableValue(
@@ -220,6 +231,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
       defaultMsdpVariables.wildernessGraphicMap,
     ),
     affects: normalizeMsdpVariableValue(raw.affects, defaultMsdpVariables.affects),
+    cooldowns: normalizeMsdpVariableValue(raw.cooldowns, defaultMsdpVariables.cooldowns),
     group: normalizeMsdpVariableValue(raw.group, defaultMsdpVariables.group),
     questInfo: normalizeMsdpVariableValue(raw.questInfo, defaultMsdpVariables.questInfo),
     opponentName: normalizeMsdpVariableValue(raw.opponentName, defaultMsdpVariables.opponentName),
@@ -228,6 +240,8 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     tankName: normalizeMsdpVariableValue(raw.tankName, defaultMsdpVariables.tankName),
     tankHealth: normalizeMsdpVariableValue(raw.tankHealth, defaultMsdpVariables.tankHealth),
     tankHealthMax: normalizeMsdpVariableValue(raw.tankHealthMax, defaultMsdpVariables.tankHealthMax),
+    bacta: normalizeMsdpVariableValue(raw.bacta, defaultMsdpVariables.bacta),
+    powerCells: normalizeMsdpVariableValue(raw.powerCells, defaultMsdpVariables.powerCells),
   }
 }
 
@@ -252,6 +266,7 @@ export type ClientMessage =
       host: string
       port: number
       msdpVariables: MsdpVariableMap
+      starWarsMode: boolean
     }
   | {
       type: 'disconnect'
@@ -263,6 +278,7 @@ export type ClientMessage =
   | {
       type: 'msdp-config'
       msdpVariables: MsdpVariableMap
+      starWarsMode: boolean
     }
 
 export type ServerMessage =

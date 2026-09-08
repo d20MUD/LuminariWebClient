@@ -12,6 +12,7 @@ import {
   isWildernessRoomVnum,
   isMovementCommandInput,
   normalizeMsdpVariableMap,
+  starWarsMsdpVariableKeys,
 } from '../shared/mud.ts'
 import type {
   ClientMessage,
@@ -103,7 +104,7 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type === 'connect') {
-      session.connect(message.host, message.port, normalizeMsdpVariableMap(message.msdpVariables))
+      session.connect(message.host, message.port, normalizeMsdpVariableMap(message.msdpVariables), message.starWarsMode)
       return
     }
 
@@ -113,7 +114,7 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type === 'msdp-config') {
-      session.updateMsdpVariables(normalizeMsdpVariableMap(message.msdpVariables))
+      session.updateMsdpVariables(normalizeMsdpVariableMap(message.msdpVariables), message.starWarsMode)
       return
     }
 
@@ -136,6 +137,7 @@ class MudSession {
   private state: MudState = {}
   private msdpInitialized = false
   private msdpVariables: MsdpVariableMap = normalizeMsdpVariableMap(defaultMsdpVariables)
+  private starWarsMode = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private readonly browserSocket: WebSocket
 
@@ -143,7 +145,7 @@ class MudSession {
     this.browserSocket = browserSocket
   }
 
-  connect(host: string, port: number, msdpVariables: MsdpVariableMap) {
+  connect(host: string, port: number, msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
     if (!isValidHost(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
       this.sendStatus('error', 'Provide a valid MUD host and port.')
       return
@@ -153,6 +155,7 @@ class MudSession {
     this.state = {}
     this.msdpInitialized = false
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
+    this.starWarsMode = starWarsMode
     this.sendStatus('connecting', `Connecting to ${host}:${port}...`)
 
     const mudSocket = net.createConnection({ host, port })
@@ -201,8 +204,9 @@ class MudSession {
     })
   }
 
-  updateMsdpVariables(msdpVariables: MsdpVariableMap) {
+  updateMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
+    this.starWarsMode = starWarsMode
 
     if (!this.msdpInitialized) {
       return
@@ -271,7 +275,7 @@ class MudSession {
       return
     }
 
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables)) {
+    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)) {
       this.sendMsdpPair('SEND', variable)
     }
   }
@@ -312,7 +316,7 @@ class MudSession {
   }
 
   private applyMsdpConfiguration() {
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables)) {
+    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)) {
       this.sendMsdpPair('REPORT', variable)
     }
 
@@ -577,6 +581,7 @@ function parseClientMessage(data: RawData): ClientMessage | null {
         host: message.host,
         port: message.port,
         msdpVariables: normalizeMsdpVariableMap(message.msdpVariables),
+        starWarsMode: message.starWarsMode === true,
       }
     }
 
@@ -589,7 +594,11 @@ function parseClientMessage(data: RawData): ClientMessage | null {
     }
 
     if (message.type === 'msdp-config') {
-      return { type: 'msdp-config', msdpVariables: normalizeMsdpVariableMap(message.msdpVariables) }
+      return {
+        type: 'msdp-config',
+        msdpVariables: normalizeMsdpVariableMap(message.msdpVariables),
+        starWarsMode: message.starWarsMode === true,
+      }
     }
 
     return null
@@ -744,8 +753,13 @@ function normalizeScalar(value: string): MudValue {
   return value
 }
 
-function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap) {
-  const variables = new Set(Object.values(msdpVariables).map((value) => value.trim()).filter(Boolean))
+function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
+  const variables = new Set(
+    Object.entries(msdpVariables)
+      .filter(([key]) => starWarsMode || !starWarsMsdpVariableKeys.includes(key as (typeof starWarsMsdpVariableKeys)[number]))
+      .map(([, value]) => value.trim())
+      .filter(Boolean),
+  )
   const graphicMapVariables = [msdpVariables.graphicMap.trim(), msdpVariables.wildernessGraphicMap.trim()]
 
   for (const graphicMapVariable of graphicMapVariables) {
@@ -876,6 +890,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
     case 'money':
       partial.money = toOptionalNumber(value)
       break
+    case 'bank':
+      partial.bank = toOptionalNumber(value)
+      break
     case 'position':
       partial.position = toOptionalString(value)
       break
@@ -890,6 +907,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'affects':
       partial.affects = value
+      break
+    case 'cooldowns':
+      partial.cooldowns = value
       break
     case 'group':
       partial.group = value
@@ -914,6 +934,12 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'tankHealthMax':
       partial.tankHealthMax = toOptionalNumber(value)
+      break
+    case 'bacta':
+      partial.bacta = toOptionalNumber(value)
+      break
+    case 'powerCells':
+      partial.powerCells = toOptionalNumber(value)
       break
     default:
       break
