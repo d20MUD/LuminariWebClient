@@ -140,6 +140,7 @@ class MudSession {
   private starWarsMode = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private msdpInitializationTimer: ReturnType<typeof setTimeout> | null = null
   private readonly browserSocket: WebSocket
 
   constructor(browserSocket: WebSocket) {
@@ -181,9 +182,23 @@ class MudSession {
         }
 
         this.msdpInitialized = true
-        this.initializeMsdp()
+        const initialize = () => {
+          this.msdpInitializationTimer = null
+          if (this.msdpInitialized && this.mudSocket && !this.mudSocket.destroyed) {
+            this.initializeMsdp()
+          }
+        }
+
+        // Star Wars consumes the telnet DO MSDP acknowledgement in a prior
+        // input cycle. Sending REPORT/SEND in that same cycle drops the
+        // requests; give the server a moment to enter MSDP mode first.
+        if (this.starWarsMode) {
+          this.msdpInitializationTimer = setTimeout(initialize, 75)
+        } else {
+          initialize()
+        }
       },
-    })
+    }, this.starWarsMode ? 75 : 0)
 
     mudSocket.setNoDelay(true)
 
@@ -359,6 +374,11 @@ class MudSession {
       this.initialMsdpRefreshTimer = null
     }
 
+    if (this.msdpInitializationTimer) {
+      clearTimeout(this.msdpInitializationTimer)
+      this.msdpInitializationTimer = null
+    }
+
     this.parser = null
     this.mudSocket = null
     this.msdpInitialized = false
@@ -420,10 +440,12 @@ class TelnetParser {
   private currentSbOption = 0
   private readonly socket: net.Socket
   private readonly callbacks: TelnetParserCallbacks
+  private readonly msdpAcknowledgementDelayMs: number
 
-  constructor(socket: net.Socket, callbacks: TelnetParserCallbacks) {
+  constructor(socket: net.Socket, callbacks: TelnetParserCallbacks, msdpAcknowledgementDelayMs = 0) {
     this.socket = socket
     this.callbacks = callbacks
+    this.msdpAcknowledgementDelayMs = msdpAcknowledgementDelayMs
   }
 
   push(chunk: Buffer) {
@@ -521,8 +543,21 @@ class TelnetParser {
   private handleNegotiation(command: number, option: number) {
     if (command === WILL) {
       if (option === TELOPT_MSDP) {
-        this.sendNegotiation(DO, option)
-        this.callbacks.onMsdpReady()
+        const acknowledge = () => {
+          if (!this.socket.destroyed) {
+            this.sendNegotiation(DO, option)
+            this.callbacks.onMsdpReady()
+          }
+        }
+
+        // Star Wars otherwise loses the acknowledgement while processing its
+        // initial telnet negotiation burst. Other MUDs keep the normal
+        // immediate acknowledgement path.
+        if (this.msdpAcknowledgementDelayMs > 0) {
+          setTimeout(acknowledge, this.msdpAcknowledgementDelayMs)
+        } else {
+          acknowledge()
+        }
         return
       }
 
