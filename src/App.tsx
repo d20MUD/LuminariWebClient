@@ -830,7 +830,14 @@ function App() {
   const bars = useMemo<BarConfig[]>(
     () => {
       const nextBars: BarConfig[] = []
-      const combatGaugeDataAvailable = hasCombatGaugeData(mudState)
+      const opponentGaugeDataAvailable = hasCompleteCombatGaugeData(
+        mudState.opponentHealth,
+        mudState.opponentHealthMax,
+      )
+      const tankGaugeDataAvailable = hasCompleteCombatGaugeData(
+        mudState.tankHealth,
+        mudState.tankHealthMax,
+      )
 
       if (clientSettings.layout.gauges.health.visible) {
         nextBars.push(
@@ -896,7 +903,7 @@ function App() {
         nextBars.push(buildResourceHudBar('power-cells', status, 'Power Cells', mudState.powerCells, 'bar-power-cells'))
       }
 
-      if (shouldRenderCombatGauge(clientSettings.layout.gauges.opponent.visibilityMode, combatGaugeDataAvailable)) {
+      if (shouldRenderCombatGauge(clientSettings.layout.gauges.opponent.visibilityMode, opponentGaugeDataAvailable)) {
         nextBars.push(
           buildHudBar({
           id: 'opponent',
@@ -910,7 +917,7 @@ function App() {
         )
       }
 
-      if (shouldRenderCombatGauge(clientSettings.layout.gauges.tank.visibilityMode, combatGaugeDataAvailable)) {
+      if (shouldRenderCombatGauge(clientSettings.layout.gauges.tank.visibilityMode, tankGaugeDataAvailable)) {
         nextBars.push(
           buildHudBar({
           id: 'tank',
@@ -4667,9 +4674,9 @@ function buildHudBar({
   accentClass: string
   widthValue: string
 }): BarConfig {
-  const hasValue = value !== undefined && max !== undefined
-  const safeMax = max && max > 0 ? max : 0
-  const percentage = hasValue && safeMax > 0 ? Math.min(Math.max((value / safeMax) * 100, 0), 100) : 0
+  const hasValue = Number.isFinite(value) && Number.isFinite(max) && (max as number) > 0
+  const safeMax = hasValue ? (max as number) : 0
+  const percentage = hasValue && safeMax > 0 ? Math.min(Math.max(((value as number) / safeMax) * 100, 0), 100) : 0
   const availabilityKind = getHudBarAvailabilityKind(status, hasValue)
   const valueText = hasValue ? `${formatNumber(value)} / ${formatNumber(max)}` : getHudBarFallbackText(availabilityKind)
   const ariaLabel = `${label} ${valueText}`
@@ -5281,8 +5288,8 @@ function getExperienceProgress(mudState: MudState) {
   return Math.max(mudState.experienceMax - mudState.experienceTnl, 0)
 }
 
-function hasCombatGaugeData(mudState: MudState) {
-  return typeof mudState.opponentHealth === 'number' && mudState.opponentHealth > 0
+function hasCompleteCombatGaugeData(value?: number, max?: number) {
+  return Number.isFinite(value) && Number.isFinite(max) && (value as number) > 0 && (max as number) > 0
 }
 
 function buildAsciiMapOutput(minimap?: string) {

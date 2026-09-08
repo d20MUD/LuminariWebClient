@@ -139,6 +139,7 @@ class MudSession {
   private msdpVariables: MsdpVariableMap = normalizeMsdpVariableMap(defaultMsdpVariables)
   private starWarsMode = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private readonly browserSocket: WebSocket
 
   constructor(browserSocket: WebSocket) {
@@ -253,6 +254,7 @@ class MudSession {
     this.sendMsdpPair('256_COLORS', 1)
     this.sendMsdpPair('UTF_8', 1)
     this.applyMsdpConfiguration()
+    this.scheduleInitialMsdpRefresh()
   }
 
   private sendMsdpPair(variable: string, value: string | number) {
@@ -323,10 +325,38 @@ class MudSession {
     this.requestStateRefresh()
   }
 
+  private scheduleInitialMsdpRefresh(attemptsRemaining = 2, delayMs = 1200) {
+    if (this.initialMsdpRefreshTimer) {
+      clearTimeout(this.initialMsdpRefreshTimer)
+    }
+
+    this.initialMsdpRefreshTimer = setTimeout(() => {
+      this.initialMsdpRefreshTimer = null
+
+      if (!this.msdpInitialized || !this.mudSocket || this.mudSocket.destroyed) {
+        return
+      }
+
+      // A character can finish account/character selection after the first
+      // report cycle. Re-requesting twice makes the initial HUD reliable
+      // without keeping a polling loop running for the whole session.
+      this.applyMsdpConfiguration()
+
+      if (attemptsRemaining > 1) {
+        this.scheduleInitialMsdpRefresh(attemptsRemaining - 1, 3500)
+      }
+    }, delayMs)
+  }
+
   private cleanupSocket() {
     if (this.movementMapRefreshTimer) {
       clearTimeout(this.movementMapRefreshTimer)
       this.movementMapRefreshTimer = null
+    }
+
+    if (this.initialMsdpRefreshTimer) {
+      clearTimeout(this.initialMsdpRefreshTimer)
+      this.initialMsdpRefreshTimer = null
     }
 
     this.parser = null
