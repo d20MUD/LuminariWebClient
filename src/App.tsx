@@ -406,6 +406,7 @@ const MSDP_VARIABLE_GROUPS: Array<{
       { key: 'position', label: 'Position' },
       { key: 'alignment', label: 'Alignment' },
       { key: 'money', label: 'Money' },
+      { key: 'bank', label: 'Bank balance' },
     ],
   },
   {
@@ -442,8 +443,11 @@ const MSDP_VARIABLE_GROUPS: Array<{
       { key: 'graphicMap', label: 'Graphic map' },
       { key: 'wildernessGraphicMap', label: 'Wilderness graphic map' },
       { key: 'affects', label: 'Affects' },
+      { key: 'cooldowns', label: 'Cooldowns (Star Wars)' },
       { key: 'group', label: 'Group' },
       { key: 'questInfo', label: 'Quest info' },
+      { key: 'bacta', label: 'Bacta (Star Wars)' },
+      { key: 'powerCells', label: 'Power cells (Star Wars)' },
     ],
   },
   {
@@ -579,6 +583,7 @@ function App() {
   const [host, setHost] = useState(initialConnectionDefaults.host)
   const [port, setPort] = useState(initialConnectionDefaults.port)
   const [selectedMudId, setSelectedMudId] = useState(initialConnectionDefaults.selectedMudId)
+  const isStarWarsConnection = selectedMudId === 'starwars'
   const [command, setCommand] = useState('')
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
@@ -861,7 +866,7 @@ function App() {
           buildHudBar({
           id: 'psp',
           status,
-          label: 'PSP',
+          label: isStarWarsConnection ? 'Force Points' : 'PSP',
           value: mudState.psp,
           max: mudState.pspMax,
           accentClass: 'bar-psp',
@@ -898,6 +903,14 @@ function App() {
         )
       }
 
+      if (isStarWarsConnection && mudState.bacta !== undefined) {
+        nextBars.push(buildResourceHudBar('bacta', status, 'Bacta', mudState.bacta, 'bar-bacta'))
+      }
+
+      if (isStarWarsConnection && mudState.powerCells !== undefined) {
+        nextBars.push(buildResourceHudBar('power-cells', status, 'Power Cells', mudState.powerCells, 'bar-power-cells'))
+      }
+
       if (shouldRenderCombatGauge(clientSettings.layout.gauges.opponent.visibilityMode, combatGaugeDataAvailable)) {
         nextBars.push(
           buildHudBar({
@@ -928,7 +941,7 @@ function App() {
 
       return nextBars
     },
-    [clientSettings.layout.gauges, mudState, status],
+    [clientSettings.layout.gauges, isStarWarsConnection, mudState, status],
   )
 
   const canConnect = proxyReady && status !== 'connecting'
@@ -1082,8 +1095,8 @@ function App() {
       return
     }
 
-    sendMessage({ type: 'msdp-config', msdpVariables: activeMsdpVariables })
-  }, [activeMsdpVariables, connected, sendMessage])
+    sendMessage({ type: 'msdp-config', msdpVariables: activeMsdpVariables, starWarsMode: isStarWarsConnection })
+  }, [activeMsdpVariables, connected, isStarWarsConnection, sendMessage])
 
   useEffect(() => {
     if (!connected) {
@@ -1135,7 +1148,7 @@ function App() {
     statusRef.current = 'connecting'
     setStatus('connecting')
     setStatusDetail(`Connecting to ${host}:${port}...`)
-    sendMessage({ type: 'connect', host, port, msdpVariables: activeMsdpVariables })
+    sendMessage({ type: 'connect', host, port, msdpVariables: activeMsdpVariables, starWarsMode: isStarWarsConnection })
   }
 
   function handleMudPresetChange(mudId: string) {
@@ -2995,6 +3008,7 @@ function App() {
                           {showArmorClass ? <Stat label="Armor Class" value={formatNumber(mudState.armorClass)} /> : null}
                           {showAlignment ? <Stat label="Alignment" value={mudState.alignment} /> : null}
                           {showMoney ? <Stat label="Money" value={formatNumber(mudState.money)} /> : null}
+                          {showMoney ? <Stat label="Bank" value={formatNumber(mudState.bank)} /> : null}
                         </dl>
                       ) : null}
                     </>
@@ -3017,7 +3031,11 @@ function App() {
                   ) : null}
 
                   {resolvedActiveSidebarTab === 'affects' ? (
-                    <AffectsPanel value={mudState.affects} />
+                    <AffectsPanel
+                      value={mudState.affects}
+                      cooldowns={mudState.cooldowns}
+                      starWarsMode={isStarWarsConnection}
+                    />
                   ) : null}
                 </div>
               </section>
@@ -4111,6 +4129,8 @@ function EmptyTabMessage({ message }: { message: string }) {
 
 type AffectsPanelProps = {
   value?: MudValue
+  cooldowns?: MudValue
+  starWarsMode: boolean
 }
 
 type AffectEntry = {
@@ -4121,12 +4141,19 @@ type AffectEntry = {
   supplementaryLines: string[]
 }
 
-function AffectsPanel({ value }: AffectsPanelProps) {
+function AffectsPanel({ value, cooldowns, starWarsMode }: AffectsPanelProps) {
   if (value === undefined || value === null) {
+    if (starWarsMode && cooldowns !== undefined && cooldowns !== null) {
+      return <StarWarsAffectsPanel affects={[]} cooldowns={parseStarWarsCooldownEntries(cooldowns)} />
+    }
     return <EmptyTabMessage message="No affects reported yet." />
   }
 
   const affects = mergeAffectEntries(parseAffectEntries(value))
+
+  if (starWarsMode) {
+    return <StarWarsAffectsPanel affects={affects} cooldowns={parseStarWarsCooldownEntries(cooldowns)} />
+  }
 
   if (affects.length === 0) {
     return <MudValuePanel value={value} emptyMessage="No affects reported yet." />
@@ -4139,6 +4166,53 @@ function AffectsPanel({ value }: AffectsPanelProps) {
       ))}
     </div>
   )
+}
+
+function StarWarsAffectsPanel({ affects, cooldowns }: { affects: AffectEntry[]; cooldowns: AffectEntry[] }) {
+  return (
+    <div className="affects-panel affects-panel-starwars">
+      <AffectSection title="Affects" entries={affects} emptyMessage="No active affects." />
+      <AffectSection title="Cooldowns" entries={cooldowns} emptyMessage="No active cooldowns." />
+    </div>
+  )
+}
+
+function AffectSection({ title, entries, emptyMessage }: { title: string; entries: AffectEntry[]; emptyMessage: string }) {
+  return (
+    <section className="affect-section" aria-label={title}>
+      <h3>{title}</h3>
+      {entries.length > 0 ? (
+        <div className="affect-section-list" role="list">
+          {entries.map((affect, index) => (
+            <AffectRow key={`${title}-${affect.nameText || 'entry'}-${index}`} affect={affect} />
+          ))}
+        </div>
+      ) : (
+        <p className="affect-section-empty">{emptyMessage}</p>
+      )}
+    </section>
+  )
+}
+
+function parseStarWarsCooldownEntries(value?: MudValue): AffectEntry[] {
+  if (typeof value !== 'string') {
+    return value === undefined || value === null ? [] : mergeAffectEntries(parseAffectEntries(value))
+  }
+
+  return value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d+)\s+(.+)$/)
+      return {
+        nameText: match?.[2] ?? line,
+        isNameMissing: false,
+        durationText: match?.[1],
+        detailLines: [],
+        supplementaryLines: [],
+      }
+    })
 }
 
 function AffectRow({ affect }: { affect: AffectEntry }) {
@@ -4647,7 +4721,7 @@ function buildHudBar({
   accentClass,
   widthValue,
 }: {
-  id: GaugeId
+  id: string
   status: ConnectionStatus
   label: string
   value?: number
@@ -4671,6 +4745,28 @@ function buildHudBar({
     availabilityKind,
     accentClass,
     widthValue,
+  }
+}
+
+function buildResourceHudBar(
+  id: string,
+  status: ConnectionStatus,
+  label: string,
+  value: number,
+  accentClass: string,
+): BarConfig {
+  const available = Number.isFinite(value)
+  const valueText = available ? formatNumber(value) ?? String(value) : getHudBarFallbackText(getHudBarAvailabilityKind(status, false))
+
+  return {
+    id,
+    label,
+    valueText,
+    percentage: available ? 100 : 0,
+    ariaLabel: `${label} ${valueText}`,
+    availabilityKind: getHudBarAvailabilityKind(status, available),
+    accentClass,
+    widthValue: '24%',
   }
 }
 
