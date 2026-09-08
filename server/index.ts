@@ -51,6 +51,7 @@ const WEB_CLIENT_NAME = 'LuminariWebClient'
 const WEB_CLIENT_VERSION = '0.1.0'
 const DEFAULT_COLUMNS = 120
 const DEFAULT_ROWS = 40
+const STAR_WARS_MSDP_COMMAND_INTERVAL_MS = 8
 const WEB_SOCKET_PING_INTERVAL_MS = 30_000
 const CONTROL_BYTES = new Set([
   MSDP_VAR,
@@ -148,6 +149,7 @@ class MudSession {
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private msdpInitializationTimer: ReturnType<typeof setTimeout> | null = null
+  private msdpConfigurationTimer: ReturnType<typeof setTimeout> | null = null
   private readonly browserSocket: WebSocket
 
   constructor(browserSocket: WebSocket) {
@@ -340,11 +342,46 @@ class MudSession {
   }
 
   private applyMsdpConfiguration() {
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)) {
-      this.sendMsdpPair('REPORT', variable)
+    const variables = getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)
+
+    if (!this.starWarsMode) {
+      for (const variable of variables) {
+        this.sendMsdpPair('REPORT', variable)
+      }
+
+      this.requestStateRefresh()
+      return
     }
 
-    this.requestStateRefresh()
+    if (this.msdpConfigurationTimer) {
+      clearTimeout(this.msdpConfigurationTimer)
+      this.msdpConfigurationTimer = null
+    }
+
+    const commands = variables.flatMap((variable) => [
+      { command: 'REPORT', variable },
+      { command: 'SEND', variable },
+    ])
+    let commandIndex = 0
+
+    const sendNext = () => {
+      if (!this.msdpInitialized || !this.mudSocket || this.mudSocket.destroyed) {
+        this.msdpConfigurationTimer = null
+        return
+      }
+
+      const next = commands[commandIndex]
+      if (!next) {
+        this.msdpConfigurationTimer = null
+        return
+      }
+
+      this.sendMsdpPair(next.command, next.variable)
+      commandIndex += 1
+      this.msdpConfigurationTimer = setTimeout(sendNext, STAR_WARS_MSDP_COMMAND_INTERVAL_MS)
+    }
+
+    sendNext()
   }
 
   private scheduleInitialMsdpRefresh(attemptsRemaining = 2, delayMs = 1200) {
@@ -384,6 +421,11 @@ class MudSession {
     if (this.msdpInitializationTimer) {
       clearTimeout(this.msdpInitializationTimer)
       this.msdpInitializationTimer = null
+    }
+
+    if (this.msdpConfigurationTimer) {
+      clearTimeout(this.msdpConfigurationTimer)
+      this.msdpConfigurationTimer = null
     }
 
     this.parser = null
