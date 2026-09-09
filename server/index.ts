@@ -97,11 +97,40 @@ app.get(/^(?!\/ws).*/, (_request, response) => {
 
 wss.on('connection', (socket) => {
   const session = new MudSession(socket)
+  let isAlive = true
   const heartbeat = setInterval(() => {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    // A browser normally replies to a WebSocket ping automatically.  Keeping
+    // this explicit liveness check prevents an intermediary from silently
+    // retaining a dead upgraded connection forever.
+    if (!isAlive) {
+      socket.terminate()
+      return
+    }
+
+    isAlive = false
+    try {
       socket.ping()
+    } catch (error) {
+      console.warn('Web client heartbeat failed:', error)
+      socket.terminate()
     }
   }, WEB_SOCKET_PING_INTERVAL_MS)
+
+  socket.on('pong', () => {
+    isAlive = true
+  })
+
+  // `ws` emits error events.  Without this listener an intermittent proxy or
+  // browser transport error can become an uncaught EventEmitter exception and
+  // terminate the complete Node proxy, disconnecting every player.
+  socket.on('error', (error) => {
+    console.warn('Web client browser socket error:', error)
+    session.disconnect('Browser WebSocket connection failed.')
+  })
 
   socket.on('message', (data) => {
     const message = parseClientMessage(data)
@@ -216,7 +245,16 @@ class MudSession {
     })
 
     mudSocket.on('data', (chunk) => {
-      this.parser?.push(chunk)
+      try {
+        this.parser?.push(chunk)
+      } catch (error) {
+        // Star Wars can emit large and nested MSDP payloads.  Keep malformed
+        // or unexpected telnet/MSDP data scoped to this session rather than
+        // allowing it to crash the shared WebSocket proxy process.
+        console.warn(`MUD protocol parse error from ${host}:${port}:`, error)
+        this.sendStatus('error', 'The MUD sent malformed protocol data; that session was disconnected.')
+        mudSocket.destroy()
+      }
     })
 
     mudSocket.on('error', (error) => {
@@ -468,7 +506,13 @@ class MudSession {
       return
     }
 
-    this.browserSocket.send(JSON.stringify(message))
+    try {
+      this.browserSocket.send(JSON.stringify(message))
+    } catch (error) {
+      // The socket can transition to CLOSED after readyState is checked.  A
+      // failed status/output send must not take down the proxy process.
+      console.warn('Unable to send message to web client:', error)
+    }
   }
 }
 
