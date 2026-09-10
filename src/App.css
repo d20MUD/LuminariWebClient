@@ -1033,9 +1033,12 @@
 .star-wars-resource-info-item {
   display: flex;
   min-width: 0;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.45rem;
+  min-height: 2.15rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  text-align: center;
 }
 
 .star-wars-resource-info-label {
@@ -1044,16 +1047,18 @@
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.03em;
+  text-align: center;
   text-transform: uppercase;
   white-space: nowrap;
 }
 
 .star-wars-resource-info-value {
+  max-width: 100%;
   min-width: 0;
   overflow: hidden;
   color: #f8fafc;
   font-size: 0.76rem;
-  text-align: right;
+  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

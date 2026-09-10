@@ -1117,6 +1117,15 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
     case 'ammoOffhandType':
       partial.ammoOffhandType = toOptionalString(value)
       break
+    case 'actionStandard':
+      partial.actionStandard = toOptionalNumber(value)
+      break
+    case 'actionMove':
+      partial.actionMove = toOptionalNumber(value)
+      break
+    case 'actionQuick':
+      partial.actionQuick = toOptionalNumber(value)
+      break
     default:
       break
   }
