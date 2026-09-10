@@ -109,6 +109,9 @@ export interface MudState {
   ammoOffhand?: number
   ammoOffhandMax?: number
   ammoOffhandType?: string
+  actionStandard?: number
+  actionMove?: number
+  actionQuick?: number
 }
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
@@ -164,6 +167,9 @@ export const defaultMsdpVariables = {
   ammoOffhand: 'AMMO_OFFHAND',
   ammoOffhandMax: 'AMMO_OFFHAND_MAX',
   ammoOffhandType: 'AMMO_OFFHAND_TYPE',
+  actionStandard: 'ACTION_STANDARD',
+  actionMove: 'ACTION_MOVE',
+  actionQuick: 'ACTION_QUICK',
 } as const
 
 export const starWarsMsdpVariableKeys = [
@@ -176,6 +182,9 @@ export const starWarsMsdpVariableKeys = [
   'ammoOffhand',
   'ammoOffhandMax',
   'ammoOffhandType',
+  'actionStandard',
+  'actionMove',
+  'actionQuick',
 ] as const
 
 type MovementCommandDefinition = {
@@ -270,6 +279,9 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     ammoOffhand: normalizeMsdpVariableValue(raw.ammoOffhand, defaultMsdpVariables.ammoOffhand),
     ammoOffhandMax: normalizeMsdpVariableValue(raw.ammoOffhandMax, defaultMsdpVariables.ammoOffhandMax),
     ammoOffhandType: normalizeMsdpVariableValue(raw.ammoOffhandType, defaultMsdpVariables.ammoOffhandType),
+    actionStandard: normalizeMsdpVariableValue(raw.actionStandard, defaultMsdpVariables.actionStandard),
+    actionMove: normalizeMsdpVariableValue(raw.actionMove, defaultMsdpVariables.actionMove),
+    actionQuick: normalizeMsdpVariableValue(raw.actionQuick, defaultMsdpVariables.actionQuick),
   }
 }
 

@@ -4109,6 +4109,10 @@ function StarWarsResourceInfo({ mudState }: { mudState: MudState }) {
       label: 'Offhand ammo',
       value: formatWeaponAmmo(mudState.ammoOffhandType, mudState.ammoOffhand, mudState.ammoOffhandMax),
     },
+    {
+      label: 'Actions',
+      value: formatActionEconomy(mudState.actionStandard, mudState.actionMove, mudState.actionQuick),
+    },
   ]
 
   return (
@@ -5336,6 +5340,20 @@ function formatWeaponAmmo(type: string | undefined, current: number | undefined,
   }
 
   return `${normalizedType ? formatMudLabel(normalizedType) : 'Unknown'} ${formatInfoNumber(current)}/${formatInfoNumber(max)}`
+}
+
+function formatActionEconomy(standard: number | undefined, move: number | undefined, quick: number | undefined) {
+  if (standard === undefined && move === undefined && quick === undefined) {
+    return '—'
+  }
+
+  const available = [
+    standard !== 0 ? 'Standard' : undefined,
+    move !== 0 ? 'Move' : undefined,
+    quick !== 0 ? 'Quick' : undefined,
+  ].filter((action): action is string => action !== undefined)
+
+  return available.length > 0 ? available.join(' · ') : 'None'
 }
 
 function formatSignedNumber(value: number | undefined) {
