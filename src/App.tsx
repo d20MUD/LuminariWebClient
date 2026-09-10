@@ -4949,7 +4949,10 @@ function renderQuestNode(value: MudValue): ReactNode {
               </div>
             ) : null}
             {quest.targets ? (
-              <div className="quest-compact-targets" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.targets) }} />
+              <div className="quest-compact-targets">
+                <span className="quest-compact-target-label">Target: </span>
+                <span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.targets) }} />
+              </div>
             ) : null}
           </div>
         ))}
@@ -5080,14 +5083,13 @@ function formatQuestProgress(value: MudValue | undefined): QuestProgress | undef
 }
 
 function formatQuestTargets(value: MudValue | undefined): string | undefined {
-  if (!Array.isArray(value)) {
-    return undefined
-  }
-
-  const names = value
+  const source = Array.isArray(value) ? value : value === undefined || value === null ? [] : [value]
+  const names = source
     .map((target) => {
       if (isMudRecord(target)) {
-        return asOptionalText(readAnyKey(target, ['name', 'NAME']))
+        return asOptionalText(
+          readAnyKey(target, ['name', 'NAME', 'short_description', 'SHORT_DESCRIPTION', 'description', 'DESCRIPTION', 'target', 'TARGET']),
+        )
       }
 
       return asOptionalText(target)
