@@ -379,6 +379,85 @@
   overscroll-behavior: contain;
 }
 
+.auto-login-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(2, 6, 23, 0.72);
+}
+
+.auto-login-modal {
+  width: min(100%, 38rem);
+  max-height: min(90vh, 44rem);
+  padding: 1rem;
+  overflow: auto;
+}
+
+.auto-login-modal-header,
+.auto-login-actions,
+.auto-login-profile {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.auto-login-modal-header {
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.auto-login-modal-header h2,
+.auto-login-modal-header p {
+  margin: 0;
+}
+
+.auto-login-modal-header p {
+  margin-top: 0.35rem;
+  color: var(--muted);
+}
+
+.auto-login-profile-list,
+.auto-login-editor {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.auto-login-profile {
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+}
+
+.auto-login-profile-select {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.2rem;
+  padding: 0.2rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.auto-login-profile-select span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.auto-login-editor label {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.auto-login-actions {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  margin-top: 1rem;
+}
+
 .window-menu-bar {
   display: flex;
   justify-content: space-between;
@@ -1194,6 +1273,22 @@
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.action-economy-list {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+}
+
+.action-economy-item {
+  white-space: nowrap;
+}
+
+.action-economy-unavailable {
+  opacity: 0.7;
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
 }
 
 .status-bar {

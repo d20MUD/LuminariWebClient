@@ -63,6 +63,16 @@ const CONTROL_BYTES = new Set([
 ])
 const REQUIRED_MSDP_VARIABLES = ['ROOM', 'ROOM_VNUM', 'MINIMAP', 'AUTOMAP', 'GRAPHIC_MAP', 'WILDERNESS_GRAPHIC_MAP']
 const MUD_TCP_KEEPALIVE_INITIAL_DELAY_MS = 30_000
+
+type AutoLoginState = {
+  accountName: string
+  accountPassword: string
+  characterName: string
+  stage: 'awaiting-account-name' | 'awaiting-password' | 'awaiting-character' | 'finishing-login'
+  output: string
+  continueCount: number
+}
+
 const app = express()
 const server = createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws' })
@@ -154,6 +164,11 @@ wss.on('connection', (socket) => {
       return
     }
 
+    if (message.type === 'auto-login') {
+      session.startAutoLogin(message.accountName, message.accountPassword, message.characterName)
+      return
+    }
+
     if (message.type === 'msdp-config') {
       session.updateMsdpVariables(normalizeMsdpVariableMap(message.msdpVariables), message.starWarsMode)
       return
@@ -180,11 +195,14 @@ class MudSession {
   private msdpInitialized = false
   private msdpVariables: MsdpVariableMap = normalizeMsdpVariableMap(defaultMsdpVariables)
   private starWarsMode = false
+  private autoLoginSupported = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private msdpInitializationTimer: ReturnType<typeof setTimeout> | null = null
   private msdpConfigurationTimer: ReturnType<typeof setTimeout> | null = null
   private isChatDestinationActive = false
+  private chatDestinationRemainder = ''
+  private autoLogin: AutoLoginState | null = null
   private readonly browserSocket: WebSocket
 
   constructor(browserSocket: WebSocket) {
@@ -202,13 +220,18 @@ class MudSession {
     this.msdpInitialized = false
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
     this.starWarsMode = starWarsMode
+    this.autoLoginSupported = isAutoLoginSupportedHost(host)
+    this.autoLogin = null
     this.sendStatus('connecting', `Connecting to ${host}:${port}...`)
 
     const mudSocket = net.createConnection({ host, port })
     this.mudSocket = mudSocket
     this.parser = new TelnetParser(mudSocket, {
       onText: (text) => {
-        const routedText = this.routeChatDestination(text)
+        this.processAutoLoginText(text)
+        const routedText = this.starWarsMode
+          ? this.routeChatDestination(text)
+          : { terminalText: text, chatText: '' }
         if (routedText.terminalText) {
           this.send({ type: 'terminal', text: routedText.terminalText })
         }
@@ -303,6 +326,8 @@ class MudSession {
   }
 
   sendInput(text: string) {
+    // A manual response means the player has taken over the login flow.
+    this.autoLogin = null
     if (!this.mudSocket || this.mudSocket.destroyed) {
       this.sendStatus('error', 'Connect to a MUD before sending commands.')
       return
@@ -312,6 +337,34 @@ class MudSession {
 
     if (isMovementCommandInput(text)) {
       this.requestMovementMapRefresh()
+    }
+  }
+
+  startAutoLogin(accountName: string, accountPassword: string, characterName: string) {
+    if (!this.mudSocket || this.mudSocket.destroyed) {
+      this.sendStatus('error', 'Connect to a MUD before starting auto-login.')
+      return
+    }
+
+    if (!this.autoLoginSupported) {
+      this.sendStatus('error', 'Auto-login is currently available only for Chronicles of Krynn, Faerun, and d20MUD: Star Wars.')
+      return
+    }
+
+    const account = accountName.trim()
+    const character = characterName.trim()
+    if (!isValidAutoLoginValue(account, 2, 32) || !accountPassword || accountPassword.length > 128 || !isValidAutoLoginValue(character, 2, 32)) {
+      this.sendStatus('error', 'The selected auto-login entry is incomplete or invalid.')
+      return
+    }
+
+    this.autoLogin = {
+      accountName: account,
+      accountPassword,
+      characterName: character,
+      stage: 'awaiting-account-name',
+      output: '',
+      continueCount: 0,
     }
   }
 
@@ -484,17 +537,79 @@ class MudSession {
     this.mudSocket = null
     this.msdpInitialized = false
     this.isChatDestinationActive = false
+    this.chatDestinationRemainder = ''
+    this.autoLogin = null
+    this.autoLoginSupported = false
+  }
+
+  private processAutoLoginText(text: string) {
+    const login = this.autoLogin
+    if (!login) {
+      return
+    }
+
+    login.output = `${login.output}${stripMudLoginFormatting(text)}`.slice(-16384)
+
+    if (/wrong password|invalid account name|does not exist|disconnecting/i.test(login.output)) {
+      this.autoLogin = null
+      return
+    }
+
+    if (login.stage === 'awaiting-account-name' && /\b(?:account\s+)?name\s*:\s*$/i.test(login.output)) {
+      this.sendAutoLoginInput(login.accountName)
+      login.stage = 'awaiting-password'
+      login.output = ''
+      return
+    }
+
+    if (login.stage === 'awaiting-password' && /password\s*:\s*$/im.test(login.output)) {
+      this.sendAutoLoginInput(login.accountPassword)
+      login.stage = 'awaiting-character'
+      login.output = ''
+      return
+    }
+
+    if (login.stage === 'awaiting-character') {
+      const slot = findAccountCharacterSlot(login.output, login.characterName)
+      if (slot) {
+        this.sendAutoLoginInput(slot)
+        login.stage = 'finishing-login'
+        login.output = ''
+      }
+      return
+    }
+
+    if (login.stage === 'finishing-login' && /press (?:enter|return).*continue/i.test(login.output)) {
+      this.sendAutoLoginInput('')
+      login.continueCount += 1
+      login.output = ''
+      if (login.continueCount >= 2) {
+        this.autoLogin = null
+      }
+    }
+  }
+
+  private sendAutoLoginInput(text: string) {
+    if (!this.mudSocket || this.mudSocket.destroyed) {
+      this.autoLogin = null
+      return
+    }
+
+    this.mudSocket.write(`${text}\n`)
   }
 
   /**
    * Star Wars marks communication for clients that enable `chatwindow` with
    * `\t<DEST <name>Comm>` and a closing DEST tag.  Preserve ordinary terminal
    * traffic while forwarding only the marked span to the browser chat pane.
+   * TCP chunks can split either tag, so retain a possible tag suffix until the
+   * next chunk instead of leaking it into the terminal stream.
    */
   private routeChatDestination(text: string) {
-    let remaining = text
+    let remaining = `${this.chatDestinationRemainder}${text}`
     let terminalText = ''
     let chatText = ''
+    this.chatDestinationRemainder = ''
 
     while (remaining) {
       if (this.isChatDestinationActive) {
@@ -502,7 +617,16 @@ class MudSession {
         const legacyClosingTag = remaining.indexOf('\t<.DEST>')
         const closingTagIndex = minimumNonNegative(standardClosingTag, legacyClosingTag)
         if (closingTagIndex === -1) {
-          chatText += remaining
+          const partialClosingTagIndex = findPartialChatDestinationTag(remaining, [
+            '\t</DEST>',
+            '\t<.DEST>',
+          ])
+          if (partialClosingTagIndex === -1) {
+            chatText += remaining
+          } else {
+            chatText += remaining.slice(0, partialClosingTagIndex)
+            this.chatDestinationRemainder = remaining.slice(partialClosingTagIndex)
+          }
           break
         }
 
@@ -515,7 +639,13 @@ class MudSession {
 
       const openingTagMatch = /\t<DEST [^>\r\n]*Comm>/.exec(remaining)
       if (!openingTagMatch || openingTagMatch.index === undefined) {
-        terminalText += remaining
+        const partialOpeningTagIndex = findPartialChatDestinationTag(remaining, ['\t<DEST '])
+        if (partialOpeningTagIndex === -1) {
+          terminalText += remaining
+        } else {
+          terminalText += remaining.slice(0, partialOpeningTagIndex)
+          this.chatDestinationRemainder = remaining.slice(partialOpeningTagIndex)
+        }
         break
       }
 
@@ -775,6 +905,30 @@ class TelnetParser {
   }
 }
 
+function isValidAutoLoginValue(value: string, minimumLength: number, maximumLength: number) {
+  return value.length >= minimumLength && value.length <= maximumLength && /^[A-Za-z][A-Za-z0-9'_-]*$/.test(value)
+}
+
+function isAutoLoginSupportedHost(host: string) {
+  const normalizedHost = host.trim().toLowerCase()
+  return normalizedHost === 'krynn.d20mud.com' || normalizedHost === 'faerun.d20mud.com' || normalizedHost === 'starwars.d20mud.com'
+}
+
+function stripMudLoginFormatting(value: string) {
+  return value
+    .replace(/(?:@[A-Za-z]|\t.)/g, '')
+}
+
+function findAccountCharacterSlot(output: string, characterName: string) {
+  const escapedName = escapeRegularExpression(characterName)
+  const characterPattern = new RegExp(`^\\s*(\\d+)\\s*(?:\\)|\\|)\\s*${escapedName}(?=\\s|\\||$)`, 'im')
+  return characterPattern.exec(output)?.[1] ?? null
+}
+
+function escapeRegularExpression(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 function parseClientMessage(data: RawData): ClientMessage | null {
   const text = dataToString(data)
   if (!text) {
@@ -809,6 +963,20 @@ function parseClientMessage(data: RawData): ClientMessage | null {
 
     if (message.type === 'input' && typeof message.text === 'string') {
       return { type: 'input', text: message.text }
+    }
+
+    if (
+      message.type === 'auto-login' &&
+      typeof message.accountName === 'string' &&
+      typeof message.accountPassword === 'string' &&
+      typeof message.characterName === 'string'
+    ) {
+      return {
+        type: 'auto-login',
+        accountName: message.accountName,
+        accountPassword: message.accountPassword,
+        characterName: message.characterName,
+      }
     }
 
     if (message.type === 'msdp-config') {
@@ -848,6 +1016,30 @@ function dataToString(data: RawData) {
 function minimumNonNegative(...values: number[]) {
   const candidates = values.filter((value) => value >= 0)
   return candidates.length > 0 ? Math.min(...candidates) : -1
+}
+
+function findPartialChatDestinationTag(value: string, tags: string[]) {
+  const markerIndex = value.lastIndexOf('\t')
+  if (markerIndex === -1) {
+    return -1
+  }
+
+  const suffix = value.slice(markerIndex)
+  if (/[\r\n]/.test(suffix)) {
+    return -1
+  }
+
+  const isPartialTag = tags.some((tag) => {
+    // The opening tag contains a variable character name, so once its fixed
+    // prefix is present any non-newline, non-`>` suffix is still incomplete.
+    if (tag === '\t<DEST ') {
+      return suffix.startsWith(tag) || tag.startsWith(suffix)
+    }
+
+    return tag.startsWith(suffix)
+  })
+
+  return isPartialTag ? markerIndex : -1
 }
 
 function isValidHost(host: string) {

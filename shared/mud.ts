@@ -320,6 +320,13 @@ export type ClientMessage =
       text: string
     }
   | {
+      /** Credentials are used only by the in-memory gateway login state machine. */
+      type: 'auto-login'
+      accountName: string
+      accountPassword: string
+      characterName: string
+    }
+  | {
       type: 'msdp-config'
       msdpVariables: MsdpVariableMap
       starWarsMode: boolean

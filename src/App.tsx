@@ -39,6 +39,7 @@ const WEBSOCKET_RECONNECT_MAX_DELAY_MS = 30_000
 const ALIASES_COOKIE_NAME = 'lwc.aliases'
 const TRIGGERS_COOKIE_NAME = 'lwc.triggers'
 const CLIENT_SETTINGS_COOKIE_NAME = 'lwc.settings'
+const AUTO_LOGIN_PROFILES_STORAGE_KEY = 'lwc.auto-login-profiles'
 const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001b\[[0-?]*[ -/]*[@-~]`, 'g')
 const LUMINARI_COLOR_CHAR = '^'
 const KRYNN_COLOR_CHAR = '\t'
@@ -227,12 +228,22 @@ type ChatPanePosition = 'column' | 'below-sidebar'
 type LayoutColumnId = 'main' | 'sidebar' | 'chat'
 type LayoutColumnPosition = 'left' | 'center' | 'right'
 
+type AutoLoginProfile = {
+  id: string
+  mudId: 'krynn' | 'faerun' | 'starwars'
+  accountName: string
+  accountPassword: string
+  characterName: string
+  autoLogin: boolean
+}
+
 type ClientSettings = {
   connection: {
     defaultMudId: string
     customMudName: string
     customHost: string
     customPort: number
+    autoLoginEnabled: boolean
   }
   layout: {
     minimalistMode: boolean
@@ -361,6 +372,7 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     customMudName: '',
     customHost: DEFAULT_HOST,
     customPort: DEFAULT_PORT,
+    autoLoginEnabled: true,
   },
   layout: {
     minimalistMode: false,
@@ -629,6 +641,10 @@ function App() {
   const [aliases, setAliases] = useState<AliasDefinition[]>(() => loadAliasesFromCookies())
   const [triggers, setTriggers] = useState<TriggerDefinition[]>(() => loadTriggersFromCookies())
   const [clientSettings, setClientSettings] = useState<ClientSettings>(initialClientSettings)
+  const [autoLoginProfiles, setAutoLoginProfiles] = useState<AutoLoginProfile[]>(() => loadAutoLoginProfiles())
+  const [isAutoLoginDialogOpen, setIsAutoLoginDialogOpen] = useState(false)
+  const [isAutoLoginEditorOpen, setIsAutoLoginEditorOpen] = useState(false)
+  const [editingAutoLoginProfile, setEditingAutoLoginProfile] = useState<AutoLoginProfile | null>(null)
   const [automationNotice, setAutomationNotice] = useState<AutomationNotice | null>(null)
   const [terminalOutput, setTerminalOutput] = useState('Connect to a LuminariMUD-compatible server to begin.')
   const [chatOutput, setChatOutput] = useState('')
@@ -675,6 +691,10 @@ function App() {
     aliasesRef.current = aliases
     saveAliasesToCookies(aliases)
   }, [aliases])
+
+  useEffect(() => {
+    saveAutoLoginProfiles(autoLoginProfiles)
+  }, [autoLoginProfiles])
 
   useEffect(() => {
     triggersRef.current = triggers
@@ -1199,6 +1219,10 @@ function App() {
     () => uiSettings.connection.muds.find((mud) => mud.id === selectedMudId),
     [selectedMudId, uiSettings.connection.muds],
   )
+  const selectedMudAutoLoginProfiles = useMemo(
+    () => autoLoginProfiles.filter((profile) => profile.mudId === selectedMudId),
+    [autoLoginProfiles, selectedMudId],
+  )
   const showMapPanel = visibleMapTabs.length > 0
   const showSidebarPanel = visibleSidebarTabs.length > 0
   const showMinimalistConnectionBar = isMinimalistMode && !connected
@@ -1371,10 +1395,79 @@ function App() {
       return
     }
 
+    if (shouldOfferAutoLogin(selectedMudId, clientSettings.connection.autoLoginEnabled)) {
+      setIsAutoLoginDialogOpen(true)
+      setIsAutoLoginEditorOpen(false)
+      setEditingAutoLoginProfile(null)
+      return
+    }
+
+    startMudConnection()
+  }
+
+  function startMudConnection(profile?: AutoLoginProfile) {
+    setIsAutoLoginDialogOpen(false)
+    setIsAutoLoginEditorOpen(false)
+    setEditingAutoLoginProfile(null)
+
     statusRef.current = 'connecting'
     setStatus('connecting')
     setStatusDetail(`Connecting to ${host}:${port}...`)
     sendMessage({ type: 'connect', host, port, msdpVariables: activeMsdpVariables, starWarsMode: isStarWarsConnection })
+    if (profile?.autoLogin) {
+      sendMessage({
+        type: 'auto-login',
+        accountName: profile.accountName,
+        accountPassword: profile.accountPassword,
+        characterName: profile.characterName,
+      })
+    }
+  }
+
+  function beginAutoLoginProfileEdit(profile?: AutoLoginProfile) {
+    setEditingAutoLoginProfile(
+      profile ?? {
+        id: createAutomationId('login'),
+        mudId: selectedMudId === 'starwars' || selectedMudId === 'faerun' ? selectedMudId : 'krynn',
+        accountName: '',
+        accountPassword: '',
+        characterName: '',
+        autoLogin: true,
+      },
+    )
+    setIsAutoLoginEditorOpen(true)
+  }
+
+  function saveAutoLoginProfile() {
+    const profile = editingAutoLoginProfile
+    if (!profile) {
+      return
+    }
+
+    if (!profile.accountName.trim() || !profile.accountPassword || !profile.characterName.trim()) {
+      setAutomationNotice({ kind: 'error', text: 'Account name, password, and character name are required.' })
+      return
+    }
+
+    setAutoLoginProfiles((current) => {
+      const index = current.findIndex((entry) => entry.id === profile.id)
+      const savedProfile = {
+        ...profile,
+        accountName: profile.accountName.trim(),
+        characterName: profile.characterName.trim(),
+      }
+      return index === -1
+        ? [...current, savedProfile]
+        : current.map((entry, entryIndex) => (entryIndex === index ? savedProfile : entry))
+    })
+    setAutomationNotice(null)
+    setIsAutoLoginEditorOpen(false)
+    setEditingAutoLoginProfile(null)
+  }
+
+  function deleteAutoLoginProfile(profileId: string) {
+    setAutoLoginProfiles((current) => current.filter((profile) => profile.id !== profileId))
+    setAutomationNotice(null)
   }
 
   function handleMudPresetChange(mudId: string) {
@@ -2878,6 +2971,22 @@ function App() {
                           </label>
                         </div>
                       ) : null}
+
+                      <div className="settings-toggle-list">
+                        <label className="automation-toggle">
+                          <input
+                            type="checkbox"
+                            checked={clientSettings.connection.autoLoginEnabled}
+                            onChange={(event) => updateConnectionSettings({ autoLoginEnabled: event.target.checked })}
+                          />
+                          <span>Offer saved-character auto-login when connecting</span>
+                        </label>
+                      </div>
+
+                      <p className="automation-menu-help">
+                        Saved credentials stay only in this browser&apos;s local storage and are never included in exported settings.
+                        LuminariMUD always uses manual login for now.
+                      </p>
                     </section>
 
                     <section className="settings-group">
@@ -3138,6 +3247,110 @@ function App() {
           <section className="status-row">
             <div className={`status-pill status-${status}`}>{status}</div>
             <p>{statusDetail}</p>
+          </section>
+        </div>
+      ) : null}
+
+      {isAutoLoginDialogOpen ? (
+        <div className="auto-login-modal-backdrop" role="presentation">
+          <section className="panel auto-login-modal" role="dialog" aria-modal="true" aria-labelledby="auto-login-title">
+            <div className="auto-login-modal-header">
+              <div>
+                <h2 id="auto-login-title">Saved characters</h2>
+                <p>Choose a character for {selectedMudPreset?.name ?? 'this MUD'}, or continue with manual login.</p>
+              </div>
+              <button type="button" aria-label="Close saved characters" onClick={() => setIsAutoLoginDialogOpen(false)}>
+                ×
+              </button>
+            </div>
+
+            {isAutoLoginEditorOpen && editingAutoLoginProfile ? (
+              <form
+                className="auto-login-editor"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  saveAutoLoginProfile()
+                }}
+              >
+                <label>
+                  <span>MUD</span>
+                  <select
+                    value={editingAutoLoginProfile.mudId}
+                    onChange={(event) => {
+                      const mudId = event.target.value
+                      if (isAutoLoginMudId(mudId)) {
+                        setEditingAutoLoginProfile((current) => current ? { ...current, mudId } : current)
+                      }
+                    }}
+                  >
+                    <option value="krynn">Chronicles of Krynn</option>
+                    <option value="faerun">Faerun</option>
+                    <option value="starwars">d20MUD: Star Wars</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Account name</span>
+                  <input
+                    autoComplete="username"
+                    value={editingAutoLoginProfile.accountName}
+                    onChange={(event) => setEditingAutoLoginProfile((current) => current ? { ...current, accountName: event.target.value } : current)}
+                  />
+                </label>
+                <label>
+                  <span>Account password</span>
+                  <input
+                    type="password"
+                    autoComplete="current-password"
+                    value={editingAutoLoginProfile.accountPassword}
+                    onChange={(event) => setEditingAutoLoginProfile((current) => current ? { ...current, accountPassword: event.target.value } : current)}
+                  />
+                </label>
+                <label>
+                  <span>Character name</span>
+                  <input
+                    value={editingAutoLoginProfile.characterName}
+                    onChange={(event) => setEditingAutoLoginProfile((current) => current ? { ...current, characterName: event.target.value } : current)}
+                  />
+                </label>
+                <label className="automation-toggle">
+                  <input
+                    type="checkbox"
+                    checked={editingAutoLoginProfile.autoLogin}
+                    onChange={(event) => setEditingAutoLoginProfile((current) => current ? { ...current, autoLogin: event.target.checked } : current)}
+                  />
+                  <span>Automatically send credentials and select this character</span>
+                </label>
+                <div className="auto-login-actions">
+                  <button type="button" onClick={() => { setIsAutoLoginEditorOpen(false); setEditingAutoLoginProfile(null) }}>
+                    Cancel
+                  </button>
+                  <button type="submit">Save character</button>
+                </div>
+              </form>
+            ) : (
+              <>
+                <div className="auto-login-profile-list">
+                  {selectedMudAutoLoginProfiles.length === 0 ? (
+                    <p className="automation-menu-help">No saved characters for this MUD yet.</p>
+                  ) : (
+                    selectedMudAutoLoginProfiles.map((profile) => (
+                      <div className="auto-login-profile" key={profile.id}>
+                        <button type="button" className="auto-login-profile-select" onClick={() => startMudConnection(profile)}>
+                          <strong>{profile.characterName}</strong>
+                          <span>{profile.accountName} · {profile.autoLogin ? 'Auto-login enabled' : 'Manual after connect'}</span>
+                        </button>
+                        <button type="button" aria-label={`Edit ${profile.characterName}`} onClick={() => beginAutoLoginProfileEdit(profile)}>Edit</button>
+                        <button type="button" aria-label={`Delete ${profile.characterName}`} onClick={() => deleteAutoLoginProfile(profile.id)}>Delete</button>
+                      </div>
+                    ))
+                  )}
+                </div>
+                <div className="auto-login-actions">
+                  <button type="button" onClick={() => beginAutoLoginProfileEdit()}>Add character</button>
+                  <button type="button" onClick={() => startMudConnection()}>Skip — log in manually</button>
+                </div>
+              </>
+            )}
           </section>
         </div>
       ) : null}
@@ -3682,6 +3895,22 @@ function loadClientSettingsFromCookies() {
   return parsePersistedClientSettings(readChunkedCookie(CLIENT_SETTINGS_COOKIE_NAME))
 }
 
+function loadAutoLoginProfiles(): AutoLoginProfile[] {
+  try {
+    return normalizeAutoLoginProfiles(window.localStorage.getItem(AUTO_LOGIN_PROFILES_STORAGE_KEY))
+  } catch {
+    return []
+  }
+}
+
+function saveAutoLoginProfiles(profiles: AutoLoginProfile[]) {
+  try {
+    window.localStorage.setItem(AUTO_LOGIN_PROFILES_STORAGE_KEY, JSON.stringify(profiles))
+  } catch {
+    // Browsers can block storage; the editor remains usable for this session.
+  }
+}
+
 function saveAliasesToCookies(aliases: AliasDefinition[]) {
   writeChunkedCookie(ALIASES_COOKIE_NAME, JSON.stringify(aliases))
 }
@@ -3727,6 +3956,35 @@ function parsePersistedClientSettings(value: string | null) {
     return normalizeClientSettings(JSON.parse(value))
   } catch {
     return DEFAULT_CLIENT_SETTINGS
+  }
+}
+
+function normalizeAutoLoginProfiles(value: string | null): AutoLoginProfile[] {
+  if (!value) {
+    return []
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(value)
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+
+    return parsed.flatMap((entry) => {
+      if (!isObjectRecord(entry) || !isAutoLoginMudId(entry.mudId)) {
+        return []
+      }
+      const id = typeof entry.id === 'string' ? entry.id.trim() : ''
+      const accountName = typeof entry.accountName === 'string' ? entry.accountName.trim() : ''
+      const accountPassword = typeof entry.accountPassword === 'string' ? entry.accountPassword : ''
+      const characterName = typeof entry.characterName === 'string' ? entry.characterName.trim() : ''
+      if (!id || !accountName || !accountPassword || !characterName) {
+        return []
+      }
+      return [{ id, mudId: entry.mudId, accountName, accountPassword, characterName, autoLogin: entry.autoLogin !== false }]
+    })
+  } catch {
+    return []
   }
 }
 
@@ -3855,6 +4113,10 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
       customMudName: readOptionalString(connectionRecord ?? {}, ['customMudName'])?.trim() ?? '',
       customHost: normalizeMudHost(readOptionalString(connectionRecord ?? {}, ['customHost'])),
       customPort: normalizeMudPort(readNumericSetting(connectionRecord?.customPort)),
+      autoLoginEnabled:
+        typeof connectionRecord?.autoLoginEnabled === 'boolean'
+          ? connectionRecord.autoLoginEnabled
+          : DEFAULT_CLIENT_SETTINGS.connection.autoLoginEnabled,
     },
     layout: {
       minimalistMode:
@@ -4251,11 +4513,26 @@ function splitStarWarsCommunicationText(value: string) {
 }
 
 function findStarWarsCommunicationStart(line: string) {
-  const channelMatch = /\((?:chat|auction|newbie|game|support|broadcast|shout|holler|ooc|commlink|clan|guild)\):/i.exec(line)
+  // Star Wars uses several output formats for communication. Global channels
+  // use `Name (CHANNEL): ...`, while role-play, group, guild, and staff
+  // communication use labels such as `(RPMOTE)`, `says on your commlink`, or
+  // `guildchats`. Keep this list explicit so ordinary room descriptions that
+  // happen to contain parentheses are not moved to the chat pane.
+  const channelMatch = /\((?:chat|auction|newbie|game|support|broadcast|shout|holonet|holler|ooc|commlink|clan|guild|wiznet|say|rsay|norpsay|norps|emote|rpmote|norpemote|nrpmote|tell|whisper|ask)\)(?::|\s)/i.exec(line)
   const directMatch = /\b(?:tells you|you tell|whispers to you|you whisper|asks you|you ask)\b/i.exec(line)
+  const speechMatch = /\b(?:says?|exclaims?|asks?)\s+(?:in\s+[^,\r\n]+,|out of character,|to the group[,:]|on\s+[^,\r\n]*\bcommlink\b[,:]?|something(?:\s+[^\r\n]*)?\.)/i.exec(line)
+  const questMatch = /\b(?:quest-says?|you quest-say)[,:]?/i.exec(line)
+  const guildMatch = /\bguildchats?\b/i.exec(line)
+  const clanMatch = /\b(?:clan|guild)\s*:/i.exec(line)
+  const wiznetMatch = /\bwiznets?\b/i.exec(line)
   const matchIndex = Math.min(
     channelMatch?.index ?? Number.POSITIVE_INFINITY,
     directMatch?.index ?? Number.POSITIVE_INFINITY,
+    speechMatch?.index ?? Number.POSITIVE_INFINITY,
+    questMatch?.index ?? Number.POSITIVE_INFINITY,
+    guildMatch?.index ?? Number.POSITIVE_INFINITY,
+    clanMatch?.index ?? Number.POSITIVE_INFINITY,
+    wiznetMatch?.index ?? Number.POSITIVE_INFINITY,
   )
   if (!Number.isFinite(matchIndex)) {
     return -1
@@ -4331,6 +4608,14 @@ function isDefaultMapType(value: unknown): value is DefaultMapType {
 
 function isSidebarWidthUnit(value: unknown): value is SidebarWidthUnit {
   return value === 'percent' || value === 'pixels'
+}
+
+function isAutoLoginMudId(value: unknown): value is AutoLoginProfile['mudId'] {
+  return value === 'krynn' || value === 'faerun' || value === 'starwars'
+}
+
+function shouldOfferAutoLogin(mudId: string, autoLoginEnabled: boolean) {
+  return autoLoginEnabled && isAutoLoginMudId(mudId)
 }
 
 function isChatPanePosition(value: unknown): value is ChatPanePosition {
@@ -5896,13 +6181,22 @@ function formatActionEconomy(standard: number | undefined, move: number | undefi
     return '—'
   }
 
-  const available = [
-    standard !== 0 ? 'Standard' : undefined,
-    move !== 0 ? 'Move' : undefined,
-    quick !== 0 ? 'Quick' : undefined,
-  ].filter((action): action is string => action !== undefined)
+  const actions = [
+    { label: 'Standard', available: standard !== 0 },
+    { label: 'Move', available: move !== 0 },
+    { label: 'Quick', available: quick !== 0 },
+  ]
 
-  return available.length > 0 ? available.join(' · ') : 'None'
+  return (
+    <span className="action-economy-list">
+      {actions.map((action, index) => (
+        <span className="action-economy-item" key={action.label}>
+          {index > 0 ? <span className="action-economy-separator"> · </span> : null}
+          <span className={action.available ? undefined : 'action-economy-unavailable'}>{action.label}</span>
+        </span>
+      ))}
+    </span>
+  )
 }
 
 function formatSignedNumber(value: number | undefined) {
