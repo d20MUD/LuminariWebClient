@@ -223,6 +223,7 @@ type TriggerDefinition = {
 }
 
 type SidebarFontFamily = 'sans' | 'mono' | 'serif'
+type ChatPanePosition = 'left-of-sidebar' | 'below-sidebar'
 
 type ClientSettings = {
   connection: {
@@ -236,6 +237,7 @@ type ClientSettings = {
     sidebarWidthUnit: SidebarWidthUnit
     sidebarWidthPercent: number
     sidebarWidthPixels: number
+    chatPanePosition: ChatPanePosition
     gauges: LayoutGaugeSettings
     mapPanels: Record<MapPanelTabId, boolean>
     sidebarTabs: Record<SidebarTabId, boolean>
@@ -309,6 +311,11 @@ const SIDEBAR_WIDTH_UNIT_OPTIONS: Array<{ value: SidebarWidthUnit; label: string
   { value: 'pixels', label: 'Pixels' },
 ]
 
+const CHAT_PANE_POSITION_OPTIONS: Array<{ value: ChatPanePosition; label: string }> = [
+  { value: 'left-of-sidebar', label: 'Left of map and player info' },
+  { value: 'below-sidebar', label: 'Below player info' },
+]
+
 const STANDARD_GAUGE_OPTIONS: Array<{ id: StandardGaugeId; label: string }> = [
   { id: 'health', label: 'Health gauge' },
   { id: 'psp', label: 'PSP gauge' },
@@ -339,6 +346,7 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     sidebarWidthUnit: 'pixels',
     sidebarWidthPercent: 30,
     sidebarWidthPixels: 416,
+    chatPanePosition: 'left-of-sidebar',
     gauges: {
       health: { ...DEFAULT_LAYOUT_GAUGES.health },
       psp: { ...DEFAULT_LAYOUT_GAUGES.psp },
@@ -595,6 +603,8 @@ function App() {
   const [clientSettings, setClientSettings] = useState<ClientSettings>(initialClientSettings)
   const [automationNotice, setAutomationNotice] = useState<AutomationNotice | null>(null)
   const [terminalOutput, setTerminalOutput] = useState('Connect to a LuminariMUD-compatible server to begin.')
+  const [chatOutput, setChatOutput] = useState('')
+  const [isChatPaneCollapsed, setIsChatPaneCollapsed] = useState(false)
   const [hasUnreadTerminalOutput, setHasUnreadTerminalOutput] = useState(false)
   const [proxyReady, setProxyReady] = useState(false)
   const [status, setStatus] = useState<ConnectionStatus>('idle')
@@ -605,6 +615,7 @@ function App() {
   const [activeMapTab, setActiveMapTab] = useState<MapPanelTabId>(() => getDefaultMapPanelTab(initialClientSettings))
   const socketRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<HTMLDivElement | null>(null)
+  const chatRef = useRef<HTMLDivElement | null>(null)
   const commandInputRef = useRef<HTMLInputElement | null>(null)
   const configFileInputRef = useRef<HTMLInputElement | null>(null)
   const menuBarRef = useRef<HTMLDivElement | null>(null)
@@ -818,6 +829,16 @@ function App() {
           return
         }
 
+        if (message.type === 'chat') {
+          setChatOutput((current) =>
+            trimTerminalOutputLines(
+              `${current}${normalizeTerminalText(message.text)}`,
+              terminalHistoryLineLimitRef.current,
+            ),
+          )
+          return
+        }
+
         if (message.type === 'terminal') {
           const shouldFollowOutput =
             clientSettingsRef.current.terminal.autoScroll && isTerminalScrolledToBottom(terminalRef.current)
@@ -846,6 +867,7 @@ function App() {
 
           if (message.status === 'connecting' || message.status === 'disconnected') {
             setMudState({})
+            setChatOutput('')
           }
 
           if (message.status === 'connected') {
@@ -884,6 +906,10 @@ function App() {
     scrollTerminalElementToBottom(terminalRef.current)
     setHasUnreadTerminalOutput(false)
   }, [terminalOutput])
+
+  useLayoutEffect(() => {
+    scrollTerminalElementToBottom(chatRef.current)
+  }, [chatOutput])
 
   const bars = useMemo<BarConfig[]>(
     () => {
@@ -999,6 +1025,7 @@ function App() {
     [clientSettings.terminal.fontSize, clientSettings.terminal.lineHeight, clientSettings.terminal.wrapLines],
   )
   const terminalOutputHtml = useMemo(() => createAnsiConverter().toHtml(terminalOutput), [terminalOutput])
+  const chatOutputHtml = useMemo(() => createAnsiConverter().toHtml(chatOutput), [chatOutput])
   const minimapStyle = useMemo<CSSProperties>(
     () => ({
       fontSize: `${clientSettings.minimap.fontSize}px`,
@@ -1055,6 +1082,10 @@ function App() {
     [selectedMudId, uiSettings.connection.muds],
   )
   const isMinimalistMode = clientSettings.layout.minimalistMode
+  const chatPanePosition = clientSettings.layout.chatPanePosition
+  const showStarWarsChatPane = isStarWarsConnection && !isMinimalistMode
+  const isChatPaneLeftOfSidebar = showStarWarsChatPane && chatPanePosition === 'left-of-sidebar'
+  const isChatPaneBelowSidebar = showStarWarsChatPane && chatPanePosition === 'below-sidebar'
   const showMapPanel = visibleMapTabs.length > 0
   const showSidebarPanel = visibleSidebarTabs.length > 0
   const showMinimalistConnectionBar = isMinimalistMode && !connected
@@ -1071,6 +1102,46 @@ function App() {
   const showAlignment = clientSettings.layout.playerInfoSections.alignment
   const showMoney = clientSettings.layout.playerInfoSections.money
   const showPlayerInfoStats = showPosition || showAttack || showArmorClass || showAlignment || showMoney
+  const chatPane = !showStarWarsChatPane ? null : isChatPaneCollapsed ? (
+    <button
+      type="button"
+      className={`chat-pane-toggle chat-pane-toggle-${chatPanePosition}`}
+      data-prevent-command-focus
+      aria-expanded={false}
+      aria-label="Show communication chat"
+      onClick={() => setIsChatPaneCollapsed(false)}
+    >
+      {chatPanePosition === 'left-of-sidebar' ? '‹' : '⌃'}
+      <span>Chat</span>
+    </button>
+  ) : (
+    <section className={`panel chat-pane chat-pane-${chatPanePosition}`}>
+      <div className="chat-pane-header">
+        <h2>Chat</h2>
+        <button
+          type="button"
+          className="chat-pane-collapse-button"
+          data-prevent-command-focus
+          aria-label="Hide communication chat"
+          onClick={() => setIsChatPaneCollapsed(true)}
+        >
+          {chatPanePosition === 'left-of-sidebar' ? '›' : '⌄'}
+        </button>
+      </div>
+      <div
+        ref={chatRef}
+        className="chat-output"
+        data-prevent-command-focus
+        aria-label="Star Wars communication chat"
+        style={terminalOutputStyle}
+        dangerouslySetInnerHTML={{
+          __html:
+            chatOutputHtml ||
+            '<span class="terminal-muted">No communication received yet. Use the MUD\'s chatwindow command to route all channel output here.</span>',
+        }}
+      />
+    </section>
+  )
   const abilityScores = useMemo(
     () => [
       { label: 'STR', value: mudState.strength },
@@ -2105,6 +2176,35 @@ function App() {
                       </div>
                     </section>
 
+                    {isStarWarsConnection ? (
+                      <section className="settings-group">
+                        <div className="settings-group-header">
+                          <h4>Chat pane</h4>
+                          <p>Place Star Wars communication beside the map and player info, or beneath them.</p>
+                        </div>
+
+                        <div className="settings-fields">
+                          <label>
+                            <span>Position</span>
+                            <select
+                              value={clientSettings.layout.chatPanePosition}
+                              onChange={(event) => {
+                                if (isChatPanePosition(event.target.value)) {
+                                  updateLayoutSettings({ chatPanePosition: event.target.value })
+                                }
+                              }}
+                            >
+                              {CHAT_PANE_POSITION_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        </div>
+                      </section>
+                    ) : null}
+
                     <section className="settings-group">
                       <div className="settings-group-header">
                         <h4>Sidebar width</h4>
@@ -2775,7 +2875,10 @@ function App() {
         </div>
       ) : null}
 
-      <main className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}`} style={layoutStyle}>
+      <main
+        className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}${isChatPaneLeftOfSidebar ? ' layout-chat-pane-left' : ''}${isChatPaneLeftOfSidebar && isChatPaneCollapsed ? ' layout-chat-pane-collapsed' : ''}`}
+        style={layoutStyle}
+      >
         <section className="terminal-column panel">
           <div className="terminal-output-shell">
             <div
@@ -2831,7 +2934,9 @@ function App() {
           </form>
         </section>
 
-        {isMinimalistMode || (!showMapPanel && !showSidebarPanel) ? null : (
+        {isChatPaneLeftOfSidebar ? chatPane : null}
+
+        {isMinimalistMode || (!showMapPanel && !showSidebarPanel && !isChatPaneBelowSidebar) ? null : (
           <aside className="sidebar">
             {showMapPanel ? (
               <section className="panel map-panel">
@@ -3085,6 +3190,8 @@ function App() {
                 </div>
               </section>
             ) : null}
+
+            {isChatPaneBelowSidebar ? chatPane : null}
           </aside>
         )}
       </main>
@@ -3498,6 +3605,9 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
         readNumericSetting(layoutRecord?.sidebarWidthPixels),
         DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPixels,
       ),
+      chatPanePosition: isChatPanePosition(layoutRecord?.chatPanePosition)
+        ? layoutRecord.chatPanePosition
+        : DEFAULT_CLIENT_SETTINGS.layout.chatPanePosition,
       gauges: {
         health: normalizeStandardGaugeSettings(layoutGaugesRecord?.health, DEFAULT_CLIENT_SETTINGS.layout.gauges.health),
         psp: normalizeStandardGaugeSettings(layoutGaugesRecord?.psp, DEFAULT_CLIENT_SETTINGS.layout.gauges.psp),
@@ -3852,6 +3962,10 @@ function isDefaultMapType(value: unknown): value is DefaultMapType {
 
 function isSidebarWidthUnit(value: unknown): value is SidebarWidthUnit {
   return value === 'percent' || value === 'pixels'
+}
+
+function isChatPanePosition(value: unknown): value is ChatPanePosition {
+  return value === 'left-of-sidebar' || value === 'below-sidebar'
 }
 
 function isGaugeVisibilityMode(value: unknown): value is GaugeVisibilityMode {

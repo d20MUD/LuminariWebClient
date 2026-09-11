@@ -174,6 +174,14 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
+.layout-chat-pane-left {
+  grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.58fr) minmax(0, var(--layout-sidebar-width, 26rem));
+}
+
+.layout-chat-pane-left.layout-chat-pane-collapsed {
+  grid-template-columns: minmax(0, 1fr) 2.2rem minmax(0, var(--layout-sidebar-width, 26rem));
+}
+
 .terminal-column {
   display: flex;
   flex-direction: column;
@@ -273,6 +281,89 @@
 .sidebar .tabbed-panel .tab-panel {
   flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.chat-pane {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.chat-pane-left-of-sidebar {
+  height: 100%;
+}
+
+.sidebar .chat-pane-below-sidebar {
+  flex: 0 0 15rem;
+}
+
+.chat-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.65rem 0.8rem 0;
+}
+
+.chat-pane-header h2 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.chat-pane-collapse-button,
+.chat-pane-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-color: var(--border);
+  background: rgba(15, 23, 42, 0.78);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.chat-pane-collapse-button {
+  min-width: 1.75rem;
+  min-height: 1.6rem;
+  padding: 0.1rem 0.35rem;
+}
+
+.chat-pane-toggle {
+  align-self: stretch;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-radius: 0.7rem;
+  padding: 0.55rem 0.2rem;
+  font-size: 1.1rem;
+}
+
+.chat-pane-toggle span {
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+}
+
+.chat-pane-toggle-below-sidebar {
+  min-height: 2rem;
+  flex-direction: row;
+}
+
+.chat-pane-toggle-below-sidebar span {
+  writing-mode: horizontal-tb;
+}
+
+.chat-output {
+  flex: 1;
+  min-height: 0;
+  margin: 0.65rem;
+  padding: 0.7rem;
+  border-radius: 0.65rem;
+  background: var(--terminal);
+  color: var(--terminal-text);
+  font-family: var(--mono);
+  overflow: auto;
   overscroll-behavior: contain;
 }
 

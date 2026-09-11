@@ -184,6 +184,7 @@ class MudSession {
   private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private msdpInitializationTimer: ReturnType<typeof setTimeout> | null = null
   private msdpConfigurationTimer: ReturnType<typeof setTimeout> | null = null
+  private isChatDestinationActive = false
   private readonly browserSocket: WebSocket
 
   constructor(browserSocket: WebSocket) {
@@ -207,7 +208,13 @@ class MudSession {
     this.mudSocket = mudSocket
     this.parser = new TelnetParser(mudSocket, {
       onText: (text) => {
-        this.send({ type: 'terminal', text })
+        const routedText = this.routeChatDestination(text)
+        if (routedText.terminalText) {
+          this.send({ type: 'terminal', text: routedText.terminalText })
+        }
+        if (routedText.chatText) {
+          this.send({ type: 'chat', text: routedText.chatText })
+        }
       },
       onMsdp: (variable, value) => {
         const partial = mapMsdpUpdate(variable, value, this.msdpVariables)
@@ -476,6 +483,48 @@ class MudSession {
     this.parser = null
     this.mudSocket = null
     this.msdpInitialized = false
+    this.isChatDestinationActive = false
+  }
+
+  /**
+   * Star Wars marks communication for clients that enable `chatwindow` with
+   * `\t<DEST <name>Comm>` and a closing DEST tag.  Preserve ordinary terminal
+   * traffic while forwarding only the marked span to the browser chat pane.
+   */
+  private routeChatDestination(text: string) {
+    let remaining = text
+    let terminalText = ''
+    let chatText = ''
+
+    while (remaining) {
+      if (this.isChatDestinationActive) {
+        const standardClosingTag = remaining.indexOf('\t</DEST>')
+        const legacyClosingTag = remaining.indexOf('\t<.DEST>')
+        const closingTagIndex = minimumNonNegative(standardClosingTag, legacyClosingTag)
+        if (closingTagIndex === -1) {
+          chatText += remaining
+          break
+        }
+
+        chatText += remaining.slice(0, closingTagIndex)
+        const closingTagLength = standardClosingTag === closingTagIndex ? '\t</DEST>'.length : '\t<.DEST>'.length
+        remaining = remaining.slice(closingTagIndex + closingTagLength)
+        this.isChatDestinationActive = false
+        continue
+      }
+
+      const openingTagMatch = /\t<DEST [^>\r\n]*Comm>/.exec(remaining)
+      if (!openingTagMatch || openingTagMatch.index === undefined) {
+        terminalText += remaining
+        break
+      }
+
+      terminalText += remaining.slice(0, openingTagMatch.index)
+      remaining = remaining.slice(openingTagMatch.index + openingTagMatch[0].length)
+      this.isChatDestinationActive = true
+    }
+
+    return { terminalText, chatText }
   }
 
   private withLocalGraphicMapUpdate(partial: Partial<MudState>) {
@@ -794,6 +843,11 @@ function dataToString(data: RawData) {
   }
 
   return ''
+}
+
+function minimumNonNegative(...values: number[]) {
+  const candidates = values.filter((value) => value >= 0)
+  return candidates.length > 0 ? Math.min(...candidates) : -1
 }
 
 function isValidHost(host: string) {
