@@ -12,6 +12,7 @@ import {
   isWildernessRoomVnum,
   isMovementCommandInput,
   normalizeMsdpVariableMap,
+  starWarsMsdpVariableKeys,
 } from '../shared/mud.ts'
 import type {
   ClientMessage,
@@ -50,6 +51,8 @@ const WEB_CLIENT_NAME = 'LuminariWebClient'
 const WEB_CLIENT_VERSION = '0.1.0'
 const DEFAULT_COLUMNS = 120
 const DEFAULT_ROWS = 40
+const STAR_WARS_MSDP_COMMAND_INTERVAL_MS = 8
+const WEB_SOCKET_PING_INTERVAL_MS = 30_000
 const CONTROL_BYTES = new Set([
   MSDP_VAR,
   MSDP_VAL,
@@ -104,6 +107,40 @@ wss.on('connection', (socket) => {
   })
 
   const session = new MudSession(socket)
+  let isAlive = true
+  const heartbeat = setInterval(() => {
+    if (socket.readyState !== WebSocket.OPEN) {
+      return
+    }
+
+    // A browser normally replies to a WebSocket ping automatically.  Keeping
+    // this explicit liveness check prevents an intermediary from silently
+    // retaining a dead upgraded connection forever.
+    if (!isAlive) {
+      socket.terminate()
+      return
+    }
+
+    isAlive = false
+    try {
+      socket.ping()
+    } catch (error) {
+      console.warn('Web client heartbeat failed:', error)
+      socket.terminate()
+    }
+  }, WEB_SOCKET_PING_INTERVAL_MS)
+
+  socket.on('pong', () => {
+    isAlive = true
+  })
+
+  // `ws` emits error events.  Without this listener an intermittent proxy or
+  // browser transport error can become an uncaught EventEmitter exception and
+  // terminate the complete Node proxy, disconnecting every player.
+  socket.on('error', (error) => {
+    console.warn('Web client browser socket error:', error)
+    session.disconnect('Browser WebSocket connection failed.')
+  })
 
   socket.on('message', (data) => {
     const message = parseClientMessage(data)
@@ -113,7 +150,7 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type === 'connect') {
-      session.connect(message.host, message.port, normalizeMsdpVariableMap(message.msdpVariables))
+      session.connect(message.host, message.port, normalizeMsdpVariableMap(message.msdpVariables), message.starWarsMode)
       return
     }
 
@@ -127,7 +164,7 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type === 'msdp-config') {
-      session.updateMsdpVariables(normalizeMsdpVariableMap(message.msdpVariables))
+      session.updateMsdpVariables(normalizeMsdpVariableMap(message.msdpVariables), message.starWarsMode)
       return
     }
 
@@ -135,6 +172,7 @@ wss.on('connection', (socket) => {
   })
 
   socket.on('close', () => {
+    clearInterval(heartbeat)
     session.disconnect('Disconnected.')
   })
 })
@@ -168,14 +206,18 @@ class MudSession {
   private state: MudState = {}
   private msdpInitialized = false
   private msdpVariables: MsdpVariableMap = normalizeMsdpVariableMap(defaultMsdpVariables)
+  private starWarsMode = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
+  private msdpInitializationTimer: ReturnType<typeof setTimeout> | null = null
+  private msdpConfigurationTimer: ReturnType<typeof setTimeout> | null = null
   private readonly browserSocket: WebSocket
 
   constructor(browserSocket: WebSocket) {
     this.browserSocket = browserSocket
   }
 
-  connect(host: string, port: number, msdpVariables: MsdpVariableMap) {
+  connect(host: string, port: number, msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
     if (!isValidHost(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
       this.sendStatus('error', 'Provide a valid MUD host and port.')
       return
@@ -185,6 +227,7 @@ class MudSession {
     this.state = {}
     this.msdpInitialized = false
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
+    this.starWarsMode = starWarsMode
     this.sendStatus('connecting', `Connecting to ${host}:${port}...`)
 
     const mudSocket = net.createConnection({ host, port })
@@ -209,9 +252,23 @@ class MudSession {
         }
 
         this.msdpInitialized = true
-        this.initializeMsdp()
+        const initialize = () => {
+          this.msdpInitializationTimer = null
+          if (this.msdpInitialized && this.mudSocket && !this.mudSocket.destroyed) {
+            this.initializeMsdp()
+          }
+        }
+
+        // Star Wars consumes the telnet DO MSDP acknowledgement in a prior
+        // input cycle. Sending REPORT/SEND in that same cycle drops the
+        // requests; give the server a moment to enter MSDP mode first.
+        if (this.starWarsMode) {
+          this.msdpInitializationTimer = setTimeout(initialize, 75)
+        } else {
+          initialize()
+        }
       },
-    })
+    }, this.starWarsMode ? 75 : 0)
 
     mudSocket.setNoDelay(true)
     // Keep the otherwise quiet MUD socket alive through stateful firewalls.
@@ -222,7 +279,16 @@ class MudSession {
     })
 
     mudSocket.on('data', (chunk) => {
-      this.parser?.push(chunk)
+      try {
+        this.parser?.push(chunk)
+      } catch (error) {
+        // Star Wars can emit large and nested MSDP payloads.  Keep malformed
+        // or unexpected telnet/MSDP data scoped to this session rather than
+        // allowing it to crash the shared WebSocket proxy process.
+        console.warn(`MUD protocol parse error from ${host}:${port}:`, error)
+        this.sendStatus('error', 'The MUD sent malformed protocol data; that session was disconnected.')
+        mudSocket.destroy()
+      }
     })
 
     mudSocket.on('error', (error) => {
@@ -235,8 +301,9 @@ class MudSession {
     })
   }
 
-  updateMsdpVariables(msdpVariables: MsdpVariableMap) {
+  updateMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
+    this.starWarsMode = starWarsMode
 
     if (!this.msdpInitialized) {
       return
@@ -283,6 +350,7 @@ class MudSession {
     this.sendMsdpPair('256_COLORS', 1)
     this.sendMsdpPair('UTF_8', 1)
     this.applyMsdpConfiguration()
+    this.scheduleInitialMsdpRefresh()
   }
 
   private sendMsdpPair(variable: string, value: string | number) {
@@ -305,7 +373,7 @@ class MudSession {
       return
     }
 
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables)) {
+    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)) {
       this.sendMsdpPair('SEND', variable)
     }
   }
@@ -346,17 +414,90 @@ class MudSession {
   }
 
   private applyMsdpConfiguration() {
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables)) {
-      this.sendMsdpPair('REPORT', variable)
+    const variables = getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)
+
+    if (!this.starWarsMode) {
+      for (const variable of variables) {
+        this.sendMsdpPair('REPORT', variable)
+      }
+
+      this.requestStateRefresh()
+      return
     }
 
-    this.requestStateRefresh()
+    if (this.msdpConfigurationTimer) {
+      clearTimeout(this.msdpConfigurationTimer)
+      this.msdpConfigurationTimer = null
+    }
+
+    const commands = variables.flatMap((variable) => [
+      { command: 'REPORT', variable },
+      { command: 'SEND', variable },
+    ])
+    let commandIndex = 0
+
+    const sendNext = () => {
+      if (!this.msdpInitialized || !this.mudSocket || this.mudSocket.destroyed) {
+        this.msdpConfigurationTimer = null
+        return
+      }
+
+      const next = commands[commandIndex]
+      if (!next) {
+        this.msdpConfigurationTimer = null
+        return
+      }
+
+      this.sendMsdpPair(next.command, next.variable)
+      commandIndex += 1
+      this.msdpConfigurationTimer = setTimeout(sendNext, STAR_WARS_MSDP_COMMAND_INTERVAL_MS)
+    }
+
+    sendNext()
+  }
+
+  private scheduleInitialMsdpRefresh(attemptsRemaining = 2, delayMs = 1200) {
+    if (this.initialMsdpRefreshTimer) {
+      clearTimeout(this.initialMsdpRefreshTimer)
+    }
+
+    this.initialMsdpRefreshTimer = setTimeout(() => {
+      this.initialMsdpRefreshTimer = null
+
+      if (!this.msdpInitialized || !this.mudSocket || this.mudSocket.destroyed) {
+        return
+      }
+
+      // A character can finish account/character selection after the first
+      // report cycle. Re-requesting twice makes the initial HUD reliable
+      // without keeping a polling loop running for the whole session.
+      this.applyMsdpConfiguration()
+
+      if (attemptsRemaining > 1) {
+        this.scheduleInitialMsdpRefresh(attemptsRemaining - 1, 3500)
+      }
+    }, delayMs)
   }
 
   private cleanupSocket() {
     if (this.movementMapRefreshTimer) {
       clearTimeout(this.movementMapRefreshTimer)
       this.movementMapRefreshTimer = null
+    }
+
+    if (this.initialMsdpRefreshTimer) {
+      clearTimeout(this.initialMsdpRefreshTimer)
+      this.initialMsdpRefreshTimer = null
+    }
+
+    if (this.msdpInitializationTimer) {
+      clearTimeout(this.msdpInitializationTimer)
+      this.msdpInitializationTimer = null
+    }
+
+    if (this.msdpConfigurationTimer) {
+      clearTimeout(this.msdpConfigurationTimer)
+      this.msdpConfigurationTimer = null
     }
 
     this.parser = null
@@ -399,7 +540,13 @@ class MudSession {
       return
     }
 
-    this.browserSocket.send(JSON.stringify(message))
+    try {
+      this.browserSocket.send(JSON.stringify(message))
+    } catch (error) {
+      // The socket can transition to CLOSED after readyState is checked.  A
+      // failed status/output send must not take down the proxy process.
+      console.warn('Unable to send message to web client:', error)
+    }
   }
 }
 
@@ -420,10 +567,12 @@ class TelnetParser {
   private currentSbOption = 0
   private readonly socket: net.Socket
   private readonly callbacks: TelnetParserCallbacks
+  private readonly msdpAcknowledgementDelayMs: number
 
-  constructor(socket: net.Socket, callbacks: TelnetParserCallbacks) {
+  constructor(socket: net.Socket, callbacks: TelnetParserCallbacks, msdpAcknowledgementDelayMs = 0) {
     this.socket = socket
     this.callbacks = callbacks
+    this.msdpAcknowledgementDelayMs = msdpAcknowledgementDelayMs
   }
 
   push(chunk: Buffer) {
@@ -521,8 +670,21 @@ class TelnetParser {
   private handleNegotiation(command: number, option: number) {
     if (command === WILL) {
       if (option === TELOPT_MSDP) {
-        this.sendNegotiation(DO, option)
-        this.callbacks.onMsdpReady()
+        const acknowledge = () => {
+          if (!this.socket.destroyed) {
+            this.sendNegotiation(DO, option)
+            this.callbacks.onMsdpReady()
+          }
+        }
+
+        // Star Wars otherwise loses the acknowledgement while processing its
+        // initial telnet negotiation burst. Other MUDs keep the normal
+        // immediate acknowledgement path.
+        if (this.msdpAcknowledgementDelayMs > 0) {
+          setTimeout(acknowledge, this.msdpAcknowledgementDelayMs)
+        } else {
+          acknowledge()
+        }
         return
       }
 
@@ -611,6 +773,7 @@ function parseClientMessage(data: RawData): ClientMessage | null {
         host: message.host,
         port: message.port,
         msdpVariables: normalizeMsdpVariableMap(message.msdpVariables),
+        starWarsMode: message.starWarsMode === true,
       }
     }
 
@@ -627,7 +790,11 @@ function parseClientMessage(data: RawData): ClientMessage | null {
     }
 
     if (message.type === 'msdp-config') {
-      return { type: 'msdp-config', msdpVariables: normalizeMsdpVariableMap(message.msdpVariables) }
+      return {
+        type: 'msdp-config',
+        msdpVariables: normalizeMsdpVariableMap(message.msdpVariables),
+        starWarsMode: message.starWarsMode === true,
+      }
     }
 
     return null
@@ -782,8 +949,13 @@ function normalizeScalar(value: string): MudValue {
   return value
 }
 
-function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap) {
-  const variables = new Set(Object.values(msdpVariables).map((value) => value.trim()).filter(Boolean))
+function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
+  const variables = new Set(
+    Object.entries(msdpVariables)
+      .filter(([key]) => starWarsMode || !starWarsMsdpVariableKeys.includes(key as (typeof starWarsMsdpVariableKeys)[number]))
+      .map(([, value]) => value.trim())
+      .filter(Boolean),
+  )
   const graphicMapVariables = [msdpVariables.graphicMap.trim(), msdpVariables.wildernessGraphicMap.trim()]
 
   for (const graphicMapVariable of graphicMapVariables) {
@@ -914,6 +1086,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
     case 'money':
       partial.money = toOptionalNumber(value)
       break
+    case 'bank':
+      partial.bank = toOptionalNumber(value)
+      break
     case 'position':
       partial.position = toOptionalString(value)
       break
@@ -928,6 +1103,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'affects':
       partial.affects = value
+      break
+    case 'cooldowns':
+      partial.cooldowns = value
       break
     case 'group':
       partial.group = value
@@ -952,6 +1130,39 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'tankHealthMax':
       partial.tankHealthMax = toOptionalNumber(value)
+      break
+    case 'bacta':
+      partial.bacta = toOptionalNumber(value)
+      break
+    case 'powerCells':
+      partial.powerCells = toOptionalNumber(value)
+      break
+    case 'ammoMain':
+      partial.ammoMain = toOptionalNumber(value)
+      break
+    case 'ammoMainMax':
+      partial.ammoMainMax = toOptionalNumber(value)
+      break
+    case 'ammoMainType':
+      partial.ammoMainType = toOptionalString(value)
+      break
+    case 'ammoOffhand':
+      partial.ammoOffhand = toOptionalNumber(value)
+      break
+    case 'ammoOffhandMax':
+      partial.ammoOffhandMax = toOptionalNumber(value)
+      break
+    case 'ammoOffhandType':
+      partial.ammoOffhandType = toOptionalString(value)
+      break
+    case 'actionStandard':
+      partial.actionStandard = toOptionalNumber(value)
+      break
+    case 'actionMove':
+      partial.actionMove = toOptionalNumber(value)
+      break
+    case 'actionQuick':
+      partial.actionQuick = toOptionalNumber(value)
       break
     default:
       break
