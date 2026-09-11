@@ -223,7 +223,9 @@ type TriggerDefinition = {
 }
 
 type SidebarFontFamily = 'sans' | 'mono' | 'serif'
-type ChatPanePosition = 'left-of-sidebar' | 'below-sidebar'
+type ChatPanePosition = 'column' | 'below-sidebar'
+type LayoutColumnId = 'main' | 'sidebar' | 'chat'
+type LayoutColumnPosition = 'left' | 'center' | 'right'
 
 type ClientSettings = {
   connection: {
@@ -238,6 +240,13 @@ type ClientSettings = {
     sidebarWidthPercent: number
     sidebarWidthPixels: number
     chatPanePosition: ChatPanePosition
+    chatPaneWidthUnit: SidebarWidthUnit
+    chatPaneWidthPercent: number
+    chatPaneWidthPixels: number
+    chatPaneHeightUnit: SidebarWidthUnit
+    chatPaneHeightPercent: number
+    chatPaneHeightPixels: number
+    columnOrder: LayoutColumnId[]
     gauges: LayoutGaugeSettings
     mapPanels: Record<MapPanelTabId, boolean>
     sidebarTabs: Record<SidebarTabId, boolean>
@@ -312,8 +321,20 @@ const SIDEBAR_WIDTH_UNIT_OPTIONS: Array<{ value: SidebarWidthUnit; label: string
 ]
 
 const CHAT_PANE_POSITION_OPTIONS: Array<{ value: ChatPanePosition; label: string }> = [
-  { value: 'left-of-sidebar', label: 'Left of map and player info' },
+  { value: 'column', label: 'In its own column' },
   { value: 'below-sidebar', label: 'Below player info' },
+]
+
+const LAYOUT_COLUMN_OPTIONS: Array<{ id: LayoutColumnId; label: string }> = [
+  { id: 'main', label: 'Main window' },
+  { id: 'sidebar', label: 'Map and player info' },
+  { id: 'chat', label: 'Chat' },
+]
+
+const LAYOUT_COLUMN_POSITION_OPTIONS: Array<{ value: LayoutColumnPosition; label: string }> = [
+  { value: 'left', label: 'Left' },
+  { value: 'center', label: 'Center' },
+  { value: 'right', label: 'Right' },
 ]
 
 const STANDARD_GAUGE_OPTIONS: Array<{ id: StandardGaugeId; label: string }> = [
@@ -346,7 +367,14 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     sidebarWidthUnit: 'pixels',
     sidebarWidthPercent: 30,
     sidebarWidthPixels: 416,
-    chatPanePosition: 'left-of-sidebar',
+    chatPanePosition: 'column',
+    chatPaneWidthUnit: 'pixels',
+    chatPaneWidthPercent: 30,
+    chatPaneWidthPixels: 360,
+    chatPaneHeightUnit: 'percent',
+    chatPaneHeightPercent: 100,
+    chatPaneHeightPixels: 480,
+    columnOrder: ['main', 'chat', 'sidebar'],
     gauges: {
       health: { ...DEFAULT_LAYOUT_GAUGES.health },
       psp: { ...DEFAULT_LAYOUT_GAUGES.psp },
@@ -626,6 +654,7 @@ function App() {
   const clientSettingsRef = useRef(clientSettings)
   const terminalHistoryLineLimitRef = useRef(clientSettings.terminal.maxHistoryLines)
   const terminalShouldFollowOutputRef = useRef(true)
+  const isStarWarsConnectionRef = useRef(isStarWarsConnection)
   const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
   const visibleSidebarTabs = useMemo(() => getVisibleSidebarTabs(clientSettings.layout), [clientSettings.layout])
 
@@ -636,6 +665,10 @@ function App() {
   useEffect(() => {
     statusRef.current = status
   }, [status])
+
+  useEffect(() => {
+    isStarWarsConnectionRef.current = isStarWarsConnection
+  }, [isStarWarsConnection])
 
   useEffect(() => {
     aliasesRef.current = aliases
@@ -840,6 +873,21 @@ function App() {
         }
 
         if (message.type === 'terminal') {
+          const routedText = isStarWarsConnectionRef.current
+            ? splitStarWarsCommunicationText(message.text)
+            : { terminalText: message.text, chatText: '' }
+          if (routedText.chatText) {
+            setChatOutput((current) =>
+              trimTerminalOutputLines(
+                `${current}${normalizeTerminalText(routedText.chatText)}`,
+                terminalHistoryLineLimitRef.current,
+              ),
+            )
+          }
+          if (!routedText.terminalText) {
+            return
+          }
+
           const shouldFollowOutput =
             clientSettingsRef.current.terminal.autoScroll && isTerminalScrolledToBottom(terminalRef.current)
           terminalShouldFollowOutputRef.current = shouldFollowOutput
@@ -847,14 +895,17 @@ function App() {
             setHasUnreadTerminalOutput(true)
           }
 
-          const triggerResult = consumeTriggerText(message.text, triggerBufferRef.current, triggersRef.current)
+          const triggerResult = consumeTriggerText(routedText.terminalText, triggerBufferRef.current, triggersRef.current)
           triggerBufferRef.current = triggerResult.buffer
           for (const triggerCommand of triggerResult.commands) {
             dispatchInputText(triggerCommand, { rememberInHistory: false })
           }
 
           setTerminalOutput((current) =>
-            trimTerminalOutputLines(`${current}${normalizeTerminalText(message.text)}`, terminalHistoryLineLimitRef.current),
+            trimTerminalOutputLines(
+              `${current}${normalizeTerminalText(routedText.terminalText)}`,
+              terminalHistoryLineLimitRef.current,
+            ),
           )
           return
         }
@@ -1041,17 +1092,78 @@ function App() {
     }),
     [clientSettings.sidebar.fontFamily, clientSettings.sidebar.fontSize],
   )
-  const layoutStyle = useMemo<CSSProperties & { '--layout-sidebar-width': string }>(
-    () => ({
-      '--layout-sidebar-width':
+  const isMinimalistMode = clientSettings.layout.minimalistMode
+  const chatPanePosition = clientSettings.layout.chatPanePosition
+  const showStarWarsChatPane = isStarWarsConnection && !isMinimalistMode
+  const isChatPaneColumn = showStarWarsChatPane && chatPanePosition === 'column'
+  const isChatPaneBelowSidebar = showStarWarsChatPane && chatPanePosition === 'below-sidebar'
+  const layoutColumnOrder = clientSettings.layout.columnOrder
+  const layoutStyle = useMemo<
+    CSSProperties & {
+      '--layout-sidebar-width': string
+      '--chat-pane-width': string
+      '--chat-pane-height': string
+      '--layout-columns'?: string
+      '--layout-main-column'?: string
+      '--layout-sidebar-column'?: string
+      '--layout-chat-column'?: string
+    }
+  >(
+    () => {
+      const sidebarWidth =
         clientSettings.layout.sidebarWidthUnit === 'percent'
           ? `${clientSettings.layout.sidebarWidthPercent}%`
-          : `${clientSettings.layout.sidebarWidthPixels}px`,
-    }),
+          : `${clientSettings.layout.sidebarWidthPixels}px`
+      const chatWidth =
+        clientSettings.layout.chatPaneWidthUnit === 'percent'
+          ? `${clientSettings.layout.chatPaneWidthPercent}%`
+          : `${clientSettings.layout.chatPaneWidthPixels}px`
+      const chatHeight =
+        clientSettings.layout.chatPaneHeightUnit === 'percent'
+          ? `${clientSettings.layout.chatPaneHeightPercent}%`
+          : `${clientSettings.layout.chatPaneHeightPixels}px`
+
+      if (!isChatPaneColumn) {
+        return {
+          '--layout-sidebar-width': sidebarWidth,
+          '--chat-pane-width': chatWidth,
+          '--chat-pane-height': chatHeight,
+        }
+      }
+
+      const columnWidth = (column: LayoutColumnId) => {
+        if (column === 'main') {
+          return 'minmax(0, 1fr)'
+        }
+        if (column === 'sidebar') {
+          return 'minmax(0, var(--layout-sidebar-width))'
+        }
+        return isChatPaneCollapsed ? '2.2rem' : 'minmax(12rem, var(--chat-pane-width))'
+      }
+
+      return {
+        '--layout-sidebar-width': sidebarWidth,
+        '--chat-pane-width': chatWidth,
+        '--chat-pane-height': chatHeight,
+        '--layout-columns': layoutColumnOrder.map(columnWidth).join(' '),
+        '--layout-main-column': String(layoutColumnOrder.indexOf('main') + 1),
+        '--layout-sidebar-column': String(layoutColumnOrder.indexOf('sidebar') + 1),
+        '--layout-chat-column': String(layoutColumnOrder.indexOf('chat') + 1),
+      }
+    },
     [
+      clientSettings.layout.chatPaneHeightPercent,
+      clientSettings.layout.chatPaneHeightPixels,
+      clientSettings.layout.chatPaneHeightUnit,
+      clientSettings.layout.chatPaneWidthPercent,
+      clientSettings.layout.chatPaneWidthPixels,
+      clientSettings.layout.chatPaneWidthUnit,
       clientSettings.layout.sidebarWidthPercent,
       clientSettings.layout.sidebarWidthPixels,
       clientSettings.layout.sidebarWidthUnit,
+      isChatPaneCollapsed,
+      isChatPaneColumn,
+      layoutColumnOrder,
     ],
   )
 
@@ -1081,11 +1193,6 @@ function App() {
     () => uiSettings.connection.muds.find((mud) => mud.id === selectedMudId),
     [selectedMudId, uiSettings.connection.muds],
   )
-  const isMinimalistMode = clientSettings.layout.minimalistMode
-  const chatPanePosition = clientSettings.layout.chatPanePosition
-  const showStarWarsChatPane = isStarWarsConnection && !isMinimalistMode
-  const isChatPaneLeftOfSidebar = showStarWarsChatPane && chatPanePosition === 'left-of-sidebar'
-  const isChatPaneBelowSidebar = showStarWarsChatPane && chatPanePosition === 'below-sidebar'
   const showMapPanel = visibleMapTabs.length > 0
   const showSidebarPanel = visibleSidebarTabs.length > 0
   const showMinimalistConnectionBar = isMinimalistMode && !connected
@@ -1105,17 +1212,17 @@ function App() {
   const chatPane = !showStarWarsChatPane ? null : isChatPaneCollapsed ? (
     <button
       type="button"
-      className={`chat-pane-toggle chat-pane-toggle-${chatPanePosition}`}
+      className={`chat-pane-toggle chat-pane-toggle-${chatPanePosition}${isChatPaneColumn ? ' layout-column-chat' : ''}`}
       data-prevent-command-focus
       aria-expanded={false}
       aria-label="Show communication chat"
       onClick={() => setIsChatPaneCollapsed(false)}
     >
-      {chatPanePosition === 'left-of-sidebar' ? '‹' : '⌃'}
+      {isChatPaneColumn ? '‹' : '⌃'}
       <span>Chat</span>
     </button>
   ) : (
-    <section className={`panel chat-pane chat-pane-${chatPanePosition}`}>
+    <section className={`panel chat-pane chat-pane-${chatPanePosition}${isChatPaneColumn ? ' layout-column-chat' : ''}`}>
       <div className="chat-pane-header">
         <h2>Chat</h2>
         <button
@@ -1125,7 +1232,7 @@ function App() {
           aria-label="Hide communication chat"
           onClick={() => setIsChatPaneCollapsed(true)}
         >
-          {chatPanePosition === 'left-of-sidebar' ? '›' : '⌄'}
+          {isChatPaneColumn ? '›' : '⌄'}
         </button>
       </div>
       <div
@@ -1587,6 +1694,50 @@ function App() {
 
   function updateSidebarWidthPixels(sidebarWidthPixels: number) {
     updateLayoutSettings({ sidebarWidthPixels: clampSidebarWidthPixels(sidebarWidthPixels) })
+  }
+
+  function updateChatPaneWidthUnit(chatPaneWidthUnit: SidebarWidthUnit) {
+    updateLayoutSettings({ chatPaneWidthUnit })
+  }
+
+  function updateChatPaneWidthPercent(chatPaneWidthPercent: number) {
+    updateLayoutSettings({ chatPaneWidthPercent: clampChatPaneWidthPercent(chatPaneWidthPercent) })
+  }
+
+  function updateChatPaneWidthPixels(chatPaneWidthPixels: number) {
+    updateLayoutSettings({ chatPaneWidthPixels: clampChatPaneWidthPixels(chatPaneWidthPixels) })
+  }
+
+  function updateChatPaneHeightUnit(chatPaneHeightUnit: SidebarWidthUnit) {
+    updateLayoutSettings({ chatPaneHeightUnit })
+  }
+
+  function updateChatPaneHeightPercent(chatPaneHeightPercent: number) {
+    updateLayoutSettings({ chatPaneHeightPercent: clampChatPaneHeightPercent(chatPaneHeightPercent) })
+  }
+
+  function updateChatPaneHeightPixels(chatPaneHeightPixels: number) {
+    updateLayoutSettings({ chatPaneHeightPixels: clampChatPaneHeightPixels(chatPaneHeightPixels) })
+  }
+
+  function updateLayoutColumnPosition(column: LayoutColumnId, position: LayoutColumnPosition) {
+    setClientSettings((current) => {
+      const columnOrder = normalizeLayoutColumnOrder(current.layout.columnOrder)
+      const currentIndex = columnOrder.indexOf(column)
+      const targetIndex = LAYOUT_COLUMN_POSITION_OPTIONS.findIndex((option) => option.value === position)
+      const swappedColumn = columnOrder[targetIndex]
+      columnOrder[currentIndex] = swappedColumn
+      columnOrder[targetIndex] = column
+
+      return {
+        ...current,
+        layout: {
+          ...current.layout,
+          columnOrder,
+        },
+      }
+    })
+    setAutomationNotice(null)
   }
 
   function updateLayoutGaugeSettings(
@@ -2180,12 +2331,12 @@ function App() {
                       <section className="settings-group">
                         <div className="settings-group-header">
                           <h4>Chat pane</h4>
-                          <p>Place Star Wars communication beside the map and player info, or beneath them.</p>
+                          <p>Choose its location and size. Column positions automatically swap so each one stays unique.</p>
                         </div>
 
                         <div className="settings-fields">
                           <label>
-                            <span>Position</span>
+                            <span>Placement</span>
                             <select
                               value={clientSettings.layout.chatPanePosition}
                               onChange={(event) => {
@@ -2201,7 +2352,117 @@ function App() {
                               ))}
                             </select>
                           </label>
+
+                          <label>
+                            <span>Width mode</span>
+                            <select
+                              value={clientSettings.layout.chatPaneWidthUnit}
+                              onChange={(event) => {
+                                if (isSidebarWidthUnit(event.target.value)) {
+                                  updateChatPaneWidthUnit(event.target.value)
+                                }
+                              }}
+                            >
+                              {SIDEBAR_WIDTH_UNIT_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label>
+                            <span>Width {clientSettings.layout.chatPaneWidthUnit === 'percent' ? '(%)' : '(px)'}</span>
+                            <input
+                              type="number"
+                              min={clientSettings.layout.chatPaneWidthUnit === 'percent' ? 15 : 180}
+                              max={clientSettings.layout.chatPaneWidthUnit === 'percent' ? 70 : 1200}
+                              step={1}
+                              inputMode="numeric"
+                              value={
+                                clientSettings.layout.chatPaneWidthUnit === 'percent'
+                                  ? clientSettings.layout.chatPaneWidthPercent
+                                  : clientSettings.layout.chatPaneWidthPixels
+                              }
+                              onChange={(event) => {
+                                const value = Number(event.target.value)
+                                if (!Number.isFinite(value)) return
+                                if (clientSettings.layout.chatPaneWidthUnit === 'percent') {
+                                  updateChatPaneWidthPercent(value)
+                                } else {
+                                  updateChatPaneWidthPixels(value)
+                                }
+                              }}
+                            />
+                          </label>
+
+                          <label>
+                            <span>Height mode</span>
+                            <select
+                              value={clientSettings.layout.chatPaneHeightUnit}
+                              onChange={(event) => {
+                                if (isSidebarWidthUnit(event.target.value)) {
+                                  updateChatPaneHeightUnit(event.target.value)
+                                }
+                              }}
+                            >
+                              {SIDEBAR_WIDTH_UNIT_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+
+                          <label>
+                            <span>Height {clientSettings.layout.chatPaneHeightUnit === 'percent' ? '(%)' : '(px)'}</span>
+                            <input
+                              type="number"
+                              min={clientSettings.layout.chatPaneHeightUnit === 'percent' ? 20 : 160}
+                              max={clientSettings.layout.chatPaneHeightUnit === 'percent' ? 100 : 1600}
+                              step={1}
+                              inputMode="numeric"
+                              value={
+                                clientSettings.layout.chatPaneHeightUnit === 'percent'
+                                  ? clientSettings.layout.chatPaneHeightPercent
+                                  : clientSettings.layout.chatPaneHeightPixels
+                              }
+                              onChange={(event) => {
+                                const value = Number(event.target.value)
+                                if (!Number.isFinite(value)) return
+                                if (clientSettings.layout.chatPaneHeightUnit === 'percent') {
+                                  updateChatPaneHeightPercent(value)
+                                } else {
+                                  updateChatPaneHeightPixels(value)
+                                }
+                              }}
+                            />
+                          </label>
                         </div>
+
+                        {clientSettings.layout.chatPanePosition === 'column' ? (
+                          <div className="settings-fields">
+                            {LAYOUT_COLUMN_OPTIONS.map((column) => (
+                              <label key={column.id}>
+                                <span>{column.label} position</span>
+                                <select
+                                  value={LAYOUT_COLUMN_POSITION_OPTIONS[clientSettings.layout.columnOrder.indexOf(column.id)]?.value}
+                                  onChange={(event) => {
+                                    if (isLayoutColumnPosition(event.target.value)) {
+                                      updateLayoutColumnPosition(column.id, event.target.value)
+                                    }
+                                  }}
+                                >
+                                  {LAYOUT_COLUMN_POSITION_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </label>
+                            ))}
+                          </div>
+                        ) : null}
                       </section>
                     ) : null}
 
@@ -2876,10 +3137,10 @@ function App() {
       ) : null}
 
       <main
-        className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}${isChatPaneLeftOfSidebar ? ' layout-chat-pane-left' : ''}${isChatPaneLeftOfSidebar && isChatPaneCollapsed ? ' layout-chat-pane-collapsed' : ''}`}
+        className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}${isChatPaneColumn ? ' layout-chat-pane-column' : ''}`}
         style={layoutStyle}
       >
-        <section className="terminal-column panel">
+        <section className={`terminal-column panel${isChatPaneColumn ? ' layout-column-main' : ''}`}>
           <div className="terminal-output-shell">
             <div
               ref={terminalRef}
@@ -2934,10 +3195,10 @@ function App() {
           </form>
         </section>
 
-        {isChatPaneLeftOfSidebar ? chatPane : null}
+        {isChatPaneColumn ? chatPane : null}
 
         {isMinimalistMode || (!showMapPanel && !showSidebarPanel && !isChatPaneBelowSidebar) ? null : (
-          <aside className="sidebar">
+          <aside className={`sidebar${isChatPaneColumn ? ' layout-column-sidebar' : ''}`}>
             {showMapPanel ? (
               <section className="panel map-panel">
                 <div className="panel-header">
@@ -3605,9 +3866,30 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
         readNumericSetting(layoutRecord?.sidebarWidthPixels),
         DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPixels,
       ),
-      chatPanePosition: isChatPanePosition(layoutRecord?.chatPanePosition)
-        ? layoutRecord.chatPanePosition
-        : DEFAULT_CLIENT_SETTINGS.layout.chatPanePosition,
+      chatPanePosition: normalizeChatPanePosition(layoutRecord?.chatPanePosition),
+      chatPaneWidthUnit: isSidebarWidthUnit(layoutRecord?.chatPaneWidthUnit)
+        ? layoutRecord.chatPaneWidthUnit
+        : DEFAULT_CLIENT_SETTINGS.layout.chatPaneWidthUnit,
+      chatPaneWidthPercent: clampChatPaneWidthPercent(
+        readNumericSetting(layoutRecord?.chatPaneWidthPercent),
+        DEFAULT_CLIENT_SETTINGS.layout.chatPaneWidthPercent,
+      ),
+      chatPaneWidthPixels: clampChatPaneWidthPixels(
+        readNumericSetting(layoutRecord?.chatPaneWidthPixels),
+        DEFAULT_CLIENT_SETTINGS.layout.chatPaneWidthPixels,
+      ),
+      chatPaneHeightUnit: isSidebarWidthUnit(layoutRecord?.chatPaneHeightUnit)
+        ? layoutRecord.chatPaneHeightUnit
+        : DEFAULT_CLIENT_SETTINGS.layout.chatPaneHeightUnit,
+      chatPaneHeightPercent: clampChatPaneHeightPercent(
+        readNumericSetting(layoutRecord?.chatPaneHeightPercent),
+        DEFAULT_CLIENT_SETTINGS.layout.chatPaneHeightPercent,
+      ),
+      chatPaneHeightPixels: clampChatPaneHeightPixels(
+        readNumericSetting(layoutRecord?.chatPaneHeightPixels),
+        DEFAULT_CLIENT_SETTINGS.layout.chatPaneHeightPixels,
+      ),
+      columnOrder: normalizeLayoutColumnOrder(layoutRecord?.columnOrder),
       gauges: {
         health: normalizeStandardGaugeSettings(layoutGaugesRecord?.health, DEFAULT_CLIENT_SETTINGS.layout.gauges.health),
         psp: normalizeStandardGaugeSettings(layoutGaugesRecord?.psp, DEFAULT_CLIENT_SETTINGS.layout.gauges.psp),
@@ -3891,6 +4173,38 @@ function clampSidebarWidthPixels(value: number | undefined, fallback = DEFAULT_C
   return Math.max(240, Math.min(960, Math.trunc(value)))
 }
 
+function clampChatPaneWidthPercent(value: number | undefined, fallback = DEFAULT_CLIENT_SETTINGS.layout.chatPaneWidthPercent) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(15, Math.min(70, Math.trunc(value)))
+}
+
+function clampChatPaneWidthPixels(value: number | undefined, fallback = DEFAULT_CLIENT_SETTINGS.layout.chatPaneWidthPixels) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(180, Math.min(1200, Math.trunc(value)))
+}
+
+function clampChatPaneHeightPercent(value: number | undefined, fallback = DEFAULT_CLIENT_SETTINGS.layout.chatPaneHeightPercent) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(20, Math.min(100, Math.trunc(value)))
+}
+
+function clampChatPaneHeightPixels(value: number | undefined, fallback = DEFAULT_CLIENT_SETTINGS.layout.chatPaneHeightPixels) {
+  if (value === undefined || !Number.isFinite(value)) {
+    return fallback
+  }
+
+  return Math.max(160, Math.min(1600, Math.trunc(value)))
+}
+
 function clampGaugeWidthPercent(value: number | undefined, fallback = DEFAULT_LAYOUT_GAUGES.health.widthPercent) {
   if (value === undefined || !Number.isFinite(value)) {
     return fallback
@@ -3909,6 +4223,40 @@ function clampGaugeWidthPixels(value: number | undefined, fallback = DEFAULT_LAY
 
 function normalizeTerminalText(value: string) {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
+
+function splitStarWarsCommunicationText(value: string) {
+  const normalizedValue = normalizeTerminalText(value)
+  let terminalText = ''
+  let chatText = ''
+
+  for (const line of normalizedValue.split(/(?<=\n)/)) {
+    const communicationStart = findStarWarsCommunicationStart(line)
+    if (communicationStart === -1) {
+      terminalText += line
+      continue
+    }
+
+    terminalText += line.slice(0, communicationStart)
+    chatText += line.slice(communicationStart)
+  }
+
+  return { terminalText, chatText }
+}
+
+function findStarWarsCommunicationStart(line: string) {
+  const channelMatch = /\((?:chat|auction|newbie|game|support|broadcast|shout|holler|ooc|commlink|clan|guild)\):/i.exec(line)
+  const directMatch = /\b(?:tells you|you tell|whispers to you|you whisper|asks you|you ask)\b/i.exec(line)
+  const matchIndex = Math.min(
+    channelMatch?.index ?? Number.POSITIVE_INFINITY,
+    directMatch?.index ?? Number.POSITIVE_INFINITY,
+  )
+  if (!Number.isFinite(matchIndex)) {
+    return -1
+  }
+
+  const promptIndex = line.lastIndexOf('>', matchIndex)
+  return promptIndex === -1 ? matchIndex : promptIndex + 1
 }
 
 function isTerminalScrolledToBottom(terminal: HTMLElement | null) {
@@ -3965,7 +4313,28 @@ function isSidebarWidthUnit(value: unknown): value is SidebarWidthUnit {
 }
 
 function isChatPanePosition(value: unknown): value is ChatPanePosition {
-  return value === 'left-of-sidebar' || value === 'below-sidebar'
+  return value === 'column' || value === 'below-sidebar'
+}
+
+function normalizeChatPanePosition(value: unknown): ChatPanePosition {
+  return value === 'below-sidebar' ? 'below-sidebar' : 'column'
+}
+
+function isLayoutColumnId(value: unknown): value is LayoutColumnId {
+  return value === 'main' || value === 'sidebar' || value === 'chat'
+}
+
+function isLayoutColumnPosition(value: unknown): value is LayoutColumnPosition {
+  return value === 'left' || value === 'center' || value === 'right'
+}
+
+function normalizeLayoutColumnOrder(value: unknown): LayoutColumnId[] {
+  if (!Array.isArray(value) || value.length !== LAYOUT_COLUMN_OPTIONS.length || !value.every(isLayoutColumnId)) {
+    return [...DEFAULT_CLIENT_SETTINGS.layout.columnOrder]
+  }
+
+  const uniqueColumns = new Set(value)
+  return uniqueColumns.size === LAYOUT_COLUMN_OPTIONS.length ? [...value] : [...DEFAULT_CLIENT_SETTINGS.layout.columnOrder]
 }
 
 function isGaugeVisibilityMode(value: unknown): value is GaugeVisibilityMode {

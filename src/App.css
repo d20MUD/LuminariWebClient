@@ -163,7 +163,7 @@
 
 .layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, var(--layout-sidebar-width, 26rem));
+  grid-template-columns: var(--layout-columns, minmax(0, 1fr) minmax(0, var(--layout-sidebar-width, 26rem)));
   flex: 1;
   gap: 1rem;
   min-height: 0;
@@ -174,12 +174,16 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-.layout-chat-pane-left {
-  grid-template-columns: minmax(0, 1fr) minmax(15rem, 0.58fr) minmax(0, var(--layout-sidebar-width, 26rem));
+.layout-column-main {
+  grid-column: var(--layout-main-column);
 }
 
-.layout-chat-pane-left.layout-chat-pane-collapsed {
-  grid-template-columns: minmax(0, 1fr) 2.2rem minmax(0, var(--layout-sidebar-width, 26rem));
+.layout-column-sidebar {
+  grid-column: var(--layout-sidebar-column);
+}
+
+.layout-column-chat {
+  grid-column: var(--layout-chat-column);
 }
 
 .terminal-column {
@@ -291,12 +295,14 @@
   overflow: hidden;
 }
 
-.chat-pane-left-of-sidebar {
-  height: 100%;
+.chat-pane-column {
+  height: min(100%, var(--chat-pane-height, 100%));
+  min-width: 0;
 }
 
 .sidebar .chat-pane-below-sidebar {
-  flex: 0 0 15rem;
+  flex: 0 1 var(--chat-pane-height, 15rem);
+  min-height: 10rem;
 }
 
 .chat-pane-header {
@@ -1650,6 +1656,12 @@
   .layout {
     grid-template-columns: 1fr;
     display: grid;
+  }
+
+  .layout-column-main,
+  .layout-column-sidebar,
+  .layout-column-chat {
+    grid-column: auto;
   }
 
   .connection-form {
