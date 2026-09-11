@@ -33,6 +33,8 @@ const AUTOMATION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 const AUTOMATION_COOKIE_CHUNK_SIZE = 3000
 const AUTOMATION_RECURSION_LIMIT = 10
 const CLIENT_CONFIG_EXPORT_VERSION = 1
+const WEBSOCKET_RECONNECT_INITIAL_DELAY_MS = 1000
+const WEBSOCKET_RECONNECT_MAX_DELAY_MS = 30_000
 const ALIASES_COOKIE_NAME = 'lwc.aliases'
 const TRIGGERS_COOKIE_NAME = 'lwc.triggers'
 const CLIENT_SETTINGS_COOKIE_NAME = 'lwc.settings'
@@ -749,69 +751,110 @@ function App() {
   )
 
   useEffect(() => {
-    const socket = new WebSocket(getWebSocketUrl())
-    socketRef.current = socket
+    let disposed = false
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let reconnectAttempt = 0
 
-    socket.addEventListener('open', () => {
-      setProxyReady(true)
-      setStatusDetail((current) =>
-        current === 'Awaiting connection.' ? 'Proxy ready. Connect to start playing.' : current,
-      )
-    })
+    function connectWebSocket() {
+      const socket = new WebSocket(getWebSocketUrl())
+      socketRef.current = socket
 
-    socket.addEventListener('close', () => {
-      setProxyReady(false)
-      statusRef.current = 'error'
-      setStatus('error')
-      setStatusDetail('The local WebSocket proxy is unavailable.')
-      setIsHeaderVisible(true)
-      triggerBufferRef.current = ''
-    })
-
-    socket.addEventListener('message', (event) => {
-      const message = parseServerMessage(event.data)
-      if (!message) {
-        return
-      }
-
-      if (message.type === 'terminal') {
-        const triggerResult = consumeTriggerText(message.text, triggerBufferRef.current, triggersRef.current)
-        triggerBufferRef.current = triggerResult.buffer
-        for (const triggerCommand of triggerResult.commands) {
-          dispatchInputText(triggerCommand, { rememberInHistory: false })
+      socket.addEventListener('open', () => {
+        if (disposed || socketRef.current !== socket) {
+          return
         }
 
-        setTerminalOutput((current) =>
-          trimTerminalOutputLines(`${current}${normalizeTerminalText(message.text)}`, terminalHistoryLineLimitRef.current),
+        const reconnected = reconnectAttempt > 0
+        reconnectAttempt = 0
+        setProxyReady(true)
+        if (reconnected) {
+          statusRef.current = 'disconnected'
+          setStatus('disconnected')
+          setStatusDetail('Web connection restored. Reconnect to the MUD to resume playing.')
+          setIsHeaderVisible(true)
+          return
+        }
+
+        setStatusDetail((current) =>
+          current === 'Awaiting connection.' ? 'Proxy ready. Connect to start playing.' : current,
         )
-        return
-      }
+      })
 
-      if (message.type === 'connection-status') {
-        statusRef.current = message.status
-        setStatus(message.status)
-        setStatusDetail(message.detail)
-        setIsHeaderVisible(message.status !== 'connected')
-
-        if (message.status === 'connecting' || message.status === 'disconnected') {
-          setMudState({})
+      socket.addEventListener('close', () => {
+        if (socketRef.current === socket) {
+          socketRef.current = null
+        }
+        if (disposed) {
+          return
         }
 
-        if (message.status === 'connected') {
-          triggerBufferRef.current = ''
-          setTerminalOutput('Connected. Waiting for room text and MSDP updates...')
-        } else {
-          triggerBufferRef.current = ''
+        const lostMudConnection = statusRef.current === 'connected' || statusRef.current === 'connecting'
+        setProxyReady(false)
+        statusRef.current = lostMudConnection ? 'disconnected' : 'error'
+        setStatus(lostMudConnection ? 'disconnected' : 'error')
+        setStatusDetail('Web connection lost. Reconnecting…')
+        setIsHeaderVisible(true)
+        triggerBufferRef.current = ''
+
+        const delay = Math.min(
+          WEBSOCKET_RECONNECT_INITIAL_DELAY_MS * 2 ** reconnectAttempt,
+          WEBSOCKET_RECONNECT_MAX_DELAY_MS,
+        )
+        reconnectAttempt += 1
+        reconnectTimer = setTimeout(connectWebSocket, delay)
+      })
+
+      socket.addEventListener('message', (event) => {
+        const message = parseServerMessage(event.data)
+        if (!message) {
+          return
         }
 
-        return
-      }
+        if (message.type === 'terminal') {
+          const triggerResult = consumeTriggerText(message.text, triggerBufferRef.current, triggersRef.current)
+          triggerBufferRef.current = triggerResult.buffer
+          for (const triggerCommand of triggerResult.commands) {
+            dispatchInputText(triggerCommand, { rememberInHistory: false })
+          }
 
-      setMudState((current) => ({ ...current, ...message.state }))
-    })
+          setTerminalOutput((current) =>
+            trimTerminalOutputLines(`${current}${normalizeTerminalText(message.text)}`, terminalHistoryLineLimitRef.current),
+          )
+          return
+        }
+
+        if (message.type === 'connection-status') {
+          statusRef.current = message.status
+          setStatus(message.status)
+          setStatusDetail(message.detail)
+          setIsHeaderVisible(message.status !== 'connected')
+
+          if (message.status === 'connecting' || message.status === 'disconnected') {
+            setMudState({})
+          }
+
+          if (message.status === 'connected') {
+            triggerBufferRef.current = ''
+            setTerminalOutput('Connected. Waiting for room text and MSDP updates...')
+          } else {
+            triggerBufferRef.current = ''
+          }
+
+          return
+        }
+
+        setMudState((current) => ({ ...current, ...message.state }))
+      })
+    }
+
+    connectWebSocket()
 
     return () => {
-      socket.close()
+      disposed = true
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+      }
+      socketRef.current?.close()
       socketRef.current = null
     }
   }, [dispatchInputText])

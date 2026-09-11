@@ -59,9 +59,13 @@ const CONTROL_BYTES = new Set([
   MSDP_ARRAY_CLOSE,
 ])
 const REQUIRED_MSDP_VARIABLES = ['ROOM', 'ROOM_VNUM', 'MINIMAP', 'AUTOMAP', 'GRAPHIC_MAP', 'WILDERNESS_GRAPHIC_MAP']
+const WEBSOCKET_HEARTBEAT_INTERVAL_MS = 30_000
+const MUD_TCP_KEEPALIVE_INITIAL_DELAY_MS = 30_000
 const app = express()
 const server = createServer(app)
 const wss = new WebSocketServer({ server, path: '/ws' })
+
+type HeartbeatWebSocket = WebSocket & { isAlive?: boolean }
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -93,6 +97,12 @@ app.get(/^(?!\/ws).*/, (_request, response) => {
 })
 
 wss.on('connection', (socket) => {
+  const heartbeatSocket = socket as HeartbeatWebSocket
+  heartbeatSocket.isAlive = true
+  socket.on('pong', () => {
+    heartbeatSocket.isAlive = true
+  })
+
   const session = new MudSession(socket)
 
   socket.on('message', (data) => {
@@ -112,6 +122,10 @@ wss.on('connection', (socket) => {
       return
     }
 
+    if (message.type === 'heartbeat') {
+      return
+    }
+
     if (message.type === 'msdp-config') {
       session.updateMsdpVariables(normalizeMsdpVariableMap(message.msdpVariables))
       return
@@ -123,6 +137,24 @@ wss.on('connection', (socket) => {
   socket.on('close', () => {
     session.disconnect('Disconnected.')
   })
+})
+
+/* Browsers automatically answer ping frames with pong frames. */
+const websocketHeartbeatTimer = setInterval(() => {
+  for (const client of wss.clients) {
+    const socket = client as HeartbeatWebSocket
+    if (socket.isAlive === false) {
+      socket.terminate()
+      continue
+    }
+
+    socket.isAlive = false
+    socket.ping()
+  }
+}, WEBSOCKET_HEARTBEAT_INTERVAL_MS)
+
+wss.on('close', () => {
+  clearInterval(websocketHeartbeatTimer)
 })
 
 const port = Number(process.env.PORT ?? appSettings.ports.server)
@@ -182,6 +214,8 @@ class MudSession {
     })
 
     mudSocket.setNoDelay(true)
+    // Keep the otherwise quiet MUD socket alive through stateful firewalls.
+    mudSocket.setKeepAlive(true, MUD_TCP_KEEPALIVE_INITIAL_DELAY_MS)
 
     mudSocket.on('connect', () => {
       this.sendStatus('connected', `Connected to ${host}:${port}.`)
@@ -582,6 +616,10 @@ function parseClientMessage(data: RawData): ClientMessage | null {
 
     if (message.type === 'disconnect') {
       return { type: 'disconnect' }
+    }
+
+    if (message.type === 'heartbeat') {
+      return { type: 'heartbeat' }
     }
 
     if (message.type === 'input' && typeof message.text === 'string') {

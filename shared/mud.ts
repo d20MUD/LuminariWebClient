@@ -257,6 +257,10 @@ export type ClientMessage =
       type: 'disconnect'
     }
   | {
+      /** Keeps an otherwise idle browser-to-gateway WebSocket alive. */
+      type: 'heartbeat'
+    }
+  | {
       type: 'input'
       text: string
     }
