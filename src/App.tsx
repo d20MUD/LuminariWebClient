@@ -767,39 +767,9 @@ function App() {
       const socket = new WebSocket(getWebSocketUrl())
       socketRef.current = socket
 
-<<<<<<< HEAD
-    socket.addEventListener('close', () => {
-      setProxyReady(false)
-      statusRef.current = 'error'
-      setStatus('error')
-      setStatusDetail('The local WebSocket proxy is unavailable. Please refresh the page.')
-      setIsHeaderVisible(true)
-      triggerBufferRef.current = ''
-    })
-
-    socket.addEventListener('message', (event) => {
-      const message = parseServerMessage(event.data)
-      if (!message) {
-        return
-      }
-
-      if (message.type === 'terminal') {
-        const shouldFollowOutput =
-          clientSettingsRef.current.terminal.autoScroll && isTerminalScrolledToBottom(terminalRef.current)
-        terminalShouldFollowOutputRef.current = shouldFollowOutput
-        if (!shouldFollowOutput) {
-          setHasUnreadTerminalOutput(true)
-        }
-
-        const triggerResult = consumeTriggerText(message.text, triggerBufferRef.current, triggersRef.current)
-        triggerBufferRef.current = triggerResult.buffer
-        for (const triggerCommand of triggerResult.commands) {
-          dispatchInputText(triggerCommand, { rememberInHistory: false })
-=======
       socket.addEventListener('open', () => {
         if (disposed || socketRef.current !== socket) {
           return
->>>>>>> fef314c58aa336e3ee05eb87fc62273c252591a5
         }
 
         const reconnected = reconnectAttempt > 0
@@ -826,15 +796,6 @@ function App() {
           return
         }
 
-<<<<<<< HEAD
-        if (message.status === 'connected') {
-          triggerBufferRef.current = ''
-          terminalShouldFollowOutputRef.current = true
-          setHasUnreadTerminalOutput(false)
-          setTerminalOutput('Connected. Waiting for room text and MSDP updates...')
-        } else {
-          triggerBufferRef.current = ''
-=======
         const lostMudConnection = statusRef.current === 'connected' || statusRef.current === 'connecting'
         setProxyReady(false)
         statusRef.current = lostMudConnection ? 'disconnected' : 'error'
@@ -855,10 +816,16 @@ function App() {
         const message = parseServerMessage(event.data)
         if (!message) {
           return
->>>>>>> fef314c58aa336e3ee05eb87fc62273c252591a5
         }
 
         if (message.type === 'terminal') {
+          const shouldFollowOutput =
+            clientSettingsRef.current.terminal.autoScroll && isTerminalScrolledToBottom(terminalRef.current)
+          terminalShouldFollowOutputRef.current = shouldFollowOutput
+          if (!shouldFollowOutput) {
+            setHasUnreadTerminalOutput(true)
+          }
+
           const triggerResult = consumeTriggerText(message.text, triggerBufferRef.current, triggersRef.current)
           triggerBufferRef.current = triggerResult.buffer
           for (const triggerCommand of triggerResult.commands) {
@@ -883,6 +850,8 @@ function App() {
 
           if (message.status === 'connected') {
             triggerBufferRef.current = ''
+            terminalShouldFollowOutputRef.current = true
+            setHasUnreadTerminalOutput(false)
             setTerminalOutput('Connected. Waiting for room text and MSDP updates...')
           } else {
             triggerBufferRef.current = ''
