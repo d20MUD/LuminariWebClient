@@ -655,6 +655,7 @@ function App() {
   const terminalHistoryLineLimitRef = useRef(clientSettings.terminal.maxHistoryLines)
   const terminalShouldFollowOutputRef = useRef(true)
   const isStarWarsConnectionRef = useRef(isStarWarsConnection)
+  const pendingStarWarsChatSpeakerRef = useRef('')
   const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
   const visibleSidebarTabs = useMemo(() => getVisibleSidebarTabs(clientSettings.layout), [clientSettings.layout])
 
@@ -877,12 +878,16 @@ function App() {
             ? splitStarWarsCommunicationText(message.text)
             : { terminalText: message.text, chatText: '' }
           if (routedText.chatText) {
+            const chatText = restoreStarWarsChatSpeaker(routedText.chatText, pendingStarWarsChatSpeakerRef.current)
+            pendingStarWarsChatSpeakerRef.current = ''
             setChatOutput((current) =>
               trimTerminalOutputLines(
-                `${current}${normalizeTerminalText(routedText.chatText)}`,
+                `${current}${normalizeTerminalText(chatText)}`,
                 terminalHistoryLineLimitRef.current,
               ),
             )
+          } else if (isStarWarsConnectionRef.current) {
+            pendingStarWarsChatSpeakerRef.current = getPossibleStarWarsChatSpeaker(routedText.terminalText)
           }
           if (!routedText.terminalText) {
             return
@@ -919,6 +924,7 @@ function App() {
           if (message.status === 'connecting' || message.status === 'disconnected') {
             setMudState({})
             setChatOutput('')
+            pendingStarWarsChatSpeakerRef.current = ''
           }
 
           if (message.status === 'connected') {
@@ -4255,8 +4261,23 @@ function findStarWarsCommunicationStart(line: string) {
     return -1
   }
 
+  const lineStart = line.lastIndexOf('\n', matchIndex) + 1
   const promptIndex = line.lastIndexOf('>', matchIndex)
-  return promptIndex === -1 ? matchIndex : promptIndex + 1
+  return promptIndex >= lineStart ? promptIndex + 1 : lineStart
+}
+
+function restoreStarWarsChatSpeaker(chatText: string, pendingSpeaker: string) {
+  if (!pendingSpeaker || !/^\s*(?:@[a-z]|\t.)*\(/i.test(chatText)) {
+    return chatText
+  }
+
+  return `${pendingSpeaker} ${chatText.trimStart()}`
+}
+
+function getPossibleStarWarsChatSpeaker(text: string) {
+  const lastLine = normalizeTerminalText(text).split('\n').at(-1)?.trim() ?? ''
+  const plainText = lastLine.replace(/(?:@[a-z]|\t.)/gi, '').trim()
+  return /^[A-Za-z][A-Za-z0-9'_-]{1,31}$/.test(plainText) ? lastLine : ''
 }
 
 function isTerminalScrolledToBottom(terminal: HTMLElement | null) {

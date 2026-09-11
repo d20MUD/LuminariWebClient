@@ -186,6 +186,12 @@
   grid-column: var(--layout-chat-column);
 }
 
+.layout-chat-pane-column .layout-column-main,
+.layout-chat-pane-column .layout-column-sidebar,
+.layout-chat-pane-column .layout-column-chat {
+  grid-row: 1;
+}
+
 .terminal-column {
   display: flex;
   flex-direction: column;
@@ -1662,6 +1668,7 @@
   .layout-column-sidebar,
   .layout-column-chat {
     grid-column: auto;
+    grid-row: auto;
   }
 
   .connection-form {
