@@ -659,7 +659,9 @@ function App() {
   const [statusDetail, setStatusDetail] = useState('Awaiting connection.')
   const [isHeaderVisible, setIsHeaderVisible] = useState(true)
   const [openAutomationMenu, setOpenAutomationMenu] = useState<AutomationMenuId | null>(null)
-  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTabId>(() => getDefaultSidebarTab(initialClientSettings))
+  const [activeSidebarTab, setActiveSidebarTab] = useState<SidebarTabId>(() =>
+    getDefaultSidebarTab(initialClientSettings, initialConnectionDefaults.selectedMudId === 'starwars'),
+  )
   const [activeMapTab, setActiveMapTab] = useState<MapPanelTabId>(() => getDefaultMapPanelTab(initialClientSettings))
   const socketRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<HTMLDivElement | null>(null)
@@ -677,7 +679,10 @@ function App() {
   const isStarWarsConnectionRef = useRef(isStarWarsConnection)
   const pendingStarWarsChatSpeakerRef = useRef('')
   const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
-  const visibleSidebarTabs = useMemo(() => getVisibleSidebarTabs(clientSettings.layout), [clientSettings.layout])
+  const visibleSidebarTabs = useMemo(
+    () => getVisibleSidebarTabs(clientSettings.layout, isStarWarsConnection),
+    [clientSettings.layout, isStarWarsConnection],
+  )
 
   useEffect(() => {
     document.title = uiSettings.personalization.browserTitle
@@ -2018,7 +2023,7 @@ function App() {
       setSelectedMudId(connectionDefaults.selectedMudId)
       terminalHistoryLineLimitRef.current = importedConfig.settings.terminal.maxHistoryLines
       setTerminalOutput((current) => trimTerminalOutputLines(current, importedConfig.settings.terminal.maxHistoryLines))
-      setActiveSidebarTab(getDefaultSidebarTab(importedConfig.settings))
+      setActiveSidebarTab(getDefaultSidebarTab(importedConfig.settings, isStarWarsConnection))
       setActiveMapTab(getDefaultMapPanelTab(importedConfig.settings))
       setAliases(importedConfig.aliases)
       setTriggers(importedConfig.triggers)
@@ -2833,11 +2838,14 @@ function App() {
                     <section className="settings-group">
                       <div className="settings-group-header">
                         <h4>Sidebar tabs</h4>
-                        <p>Show or hide the Player info, Gear, Group, Affects, and Quest tabs.</p>
+                        <p>
+                          Show or hide the Player info, Group, Affects, and Quest tabs
+                          {isStarWarsConnection ? ', plus the Gear tab' : ''}.
+                        </p>
                       </div>
 
                       <div className="settings-toggle-list">
-                        {LAYOUT_SIDEBAR_TOGGLE_OPTIONS.map((option) => (
+                        {LAYOUT_SIDEBAR_TOGGLE_OPTIONS.filter((option) => isStarWarsConnection || option.id !== 'gear').map((option) => (
                           <label key={option.id} className="automation-toggle">
                             <input
                               type="checkbox"
@@ -4734,12 +4742,12 @@ function getCustomMudOptionLabel(settings: ClientSettings) {
   return name.length > 0 ? name : 'Custom'
 }
 
-function getVisibleSidebarTabs(layoutSettings: ClientSettings['layout']) {
-  return SIDEBAR_TABS.filter((tab) => layoutSettings.sidebarTabs[tab.id])
+function getVisibleSidebarTabs(layoutSettings: ClientSettings['layout'], isStarWarsConnection: boolean) {
+  return SIDEBAR_TABS.filter((tab) => (isStarWarsConnection || tab.id !== 'gear') && layoutSettings.sidebarTabs[tab.id])
 }
 
-function getDefaultSidebarTab(settings: ClientSettings): SidebarTabId {
-  return getVisibleSidebarTabs(settings.layout)[0]?.id ?? 'character'
+function getDefaultSidebarTab(settings: ClientSettings, isStarWarsConnection: boolean): SidebarTabId {
+  return getVisibleSidebarTabs(settings.layout, isStarWarsConnection)[0]?.id ?? 'character'
 }
 
 function getVisibleMapPanelTabs(layoutSettings: ClientSettings['layout']) {
