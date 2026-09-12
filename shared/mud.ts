@@ -106,9 +106,11 @@ export interface MudState {
   ammoMain?: number
   ammoMainMax?: number
   ammoMainType?: string
+  weaponMainEquipped?: number
   ammoOffhand?: number
   ammoOffhandMax?: number
   ammoOffhandType?: string
+  weaponOffhandEquipped?: number
   actionStandard?: number
   actionMove?: number
   actionQuick?: number
@@ -164,9 +166,11 @@ export const defaultMsdpVariables = {
   ammoMain: 'AMMO_MAIN',
   ammoMainMax: 'AMMO_MAIN_MAX',
   ammoMainType: 'AMMO_MAIN_TYPE',
+  weaponMainEquipped: 'WEAPON_MAIN_EQUIPPED',
   ammoOffhand: 'AMMO_OFFHAND',
   ammoOffhandMax: 'AMMO_OFFHAND_MAX',
   ammoOffhandType: 'AMMO_OFFHAND_TYPE',
+  weaponOffhandEquipped: 'WEAPON_OFFHAND_EQUIPPED',
   actionStandard: 'ACTION_STANDARD',
   actionMove: 'ACTION_MOVE',
   actionQuick: 'ACTION_QUICK',
@@ -179,9 +183,11 @@ export const starWarsMsdpVariableKeys = [
   'ammoMain',
   'ammoMainMax',
   'ammoMainType',
+  'weaponMainEquipped',
   'ammoOffhand',
   'ammoOffhandMax',
   'ammoOffhandType',
+  'weaponOffhandEquipped',
   'actionStandard',
   'actionMove',
   'actionQuick',
@@ -276,9 +282,14 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     ammoMain: normalizeMsdpVariableValue(raw.ammoMain, defaultMsdpVariables.ammoMain),
     ammoMainMax: normalizeMsdpVariableValue(raw.ammoMainMax, defaultMsdpVariables.ammoMainMax),
     ammoMainType: normalizeMsdpVariableValue(raw.ammoMainType, defaultMsdpVariables.ammoMainType),
+    weaponMainEquipped: normalizeMsdpVariableValue(raw.weaponMainEquipped, defaultMsdpVariables.weaponMainEquipped),
     ammoOffhand: normalizeMsdpVariableValue(raw.ammoOffhand, defaultMsdpVariables.ammoOffhand),
     ammoOffhandMax: normalizeMsdpVariableValue(raw.ammoOffhandMax, defaultMsdpVariables.ammoOffhandMax),
     ammoOffhandType: normalizeMsdpVariableValue(raw.ammoOffhandType, defaultMsdpVariables.ammoOffhandType),
+    weaponOffhandEquipped: normalizeMsdpVariableValue(
+      raw.weaponOffhandEquipped,
+      defaultMsdpVariables.weaponOffhandEquipped,
+    ),
     actionStandard: normalizeMsdpVariableValue(raw.actionStandard, defaultMsdpVariables.actionStandard),
     actionMove: normalizeMsdpVariableValue(raw.actionMove, defaultMsdpVariables.actionMove),
     actionQuick: normalizeMsdpVariableValue(raw.actionQuick, defaultMsdpVariables.actionQuick),

@@ -4935,11 +4935,21 @@ function StarWarsResourceInfo({ mudState }: { mudState: MudState }) {
     { label: 'Power cells', value: formatInfoNumber(mudState.powerCells) },
     {
       label: 'Main ammo',
-      value: formatWeaponAmmo(mudState.ammoMainType, mudState.ammoMain, mudState.ammoMainMax),
+      value: formatWeaponAmmo(
+        mudState.ammoMainType,
+        mudState.ammoMain,
+        mudState.ammoMainMax,
+        mudState.weaponMainEquipped,
+      ),
     },
     {
       label: 'Offhand ammo',
-      value: formatWeaponAmmo(mudState.ammoOffhandType, mudState.ammoOffhand, mudState.ammoOffhandMax),
+      value: formatWeaponAmmo(
+        mudState.ammoOffhandType,
+        mudState.ammoOffhand,
+        mudState.ammoOffhandMax,
+        mudState.weaponOffhandEquipped,
+      ),
     },
     {
       label: 'Actions',
@@ -6167,10 +6177,28 @@ function formatInfoNumber(value: number | undefined) {
   return formatNumber(value) ?? '—'
 }
 
-function formatWeaponAmmo(type: string | undefined, current: number | undefined, max: number | undefined) {
+function formatWeaponAmmo(
+  type: string | undefined,
+  current: number | undefined,
+  max: number | undefined,
+  weaponEquipped: number | undefined,
+) {
   const normalizedType = type?.trim()
+
+  if (weaponEquipped === 0) {
+    return 'Nothing wielded'
+  }
+
+  if (weaponEquipped === 1 && !normalizedType && current === undefined && max === undefined) {
+    return 'Does not use ammo'
+  }
+
+  if (!normalizedType && current === 0 && max === 0 && (weaponEquipped === 1 || weaponEquipped === undefined)) {
+    return 'Does not use ammo'
+  }
+
   if (!normalizedType && current === undefined && max === undefined) {
-    return 'None'
+    return 'Nothing wielded'
   }
 
   return `${normalizedType ? formatMudLabel(normalizedType) : 'Unknown'} ${formatInfoNumber(current)}/${formatInfoNumber(max)}`

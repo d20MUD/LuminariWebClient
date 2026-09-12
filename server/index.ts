@@ -63,12 +63,13 @@ const CONTROL_BYTES = new Set([
 ])
 const REQUIRED_MSDP_VARIABLES = ['ROOM', 'ROOM_VNUM', 'MINIMAP', 'AUTOMAP', 'GRAPHIC_MAP', 'WILDERNESS_GRAPHIC_MAP']
 const MUD_TCP_KEEPALIVE_INITIAL_DELAY_MS = 30_000
+const ANSI_ESCAPE_PATTERN = new RegExp(String.raw`\u001b\[[0-?]*[ -/]*[@-~]`, 'g')
 
 type AutoLoginState = {
   accountName: string
   accountPassword: string
   characterName: string
-  stage: 'awaiting-account-name' | 'awaiting-password' | 'awaiting-character' | 'finishing-login'
+  stage: 'awaiting-password' | 'awaiting-character' | 'finishing-login'
   output: string
   continueCount: number
 }
@@ -362,10 +363,14 @@ class MudSession {
       accountName: account,
       accountPassword,
       characterName: character,
-      stage: 'awaiting-account-name',
+      // Sending the account name now is safe even before the TCP connect event:
+      // Node queues writes until the socket is established. It also avoids
+      // losing a very fast account prompt before this browser message arrives.
+      stage: 'awaiting-password',
       output: '',
       continueCount: 0,
     }
+    this.sendAutoLoginInput(account)
   }
 
   sendStatus(status: ConnectionStatus, detail: string) {
@@ -552,13 +557,6 @@ class MudSession {
 
     if (/wrong password|invalid account name|does not exist|disconnecting/i.test(login.output)) {
       this.autoLogin = null
-      return
-    }
-
-    if (login.stage === 'awaiting-account-name' && /\b(?:account\s+)?name\s*:\s*$/i.test(login.output)) {
-      this.sendAutoLoginInput(login.accountName)
-      login.stage = 'awaiting-password'
-      login.output = ''
       return
     }
 
@@ -916,6 +914,7 @@ function isAutoLoginSupportedHost(host: string) {
 
 function stripMudLoginFormatting(value: string) {
   return value
+    .replace(ANSI_ESCAPE_PATTERN, '')
     .replace(/(?:@[A-Za-z]|\t.)/g, '')
 }
 
@@ -1365,6 +1364,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
     case 'ammoMainType':
       partial.ammoMainType = toOptionalString(value)
       break
+    case 'weaponMainEquipped':
+      partial.weaponMainEquipped = toOptionalNumber(value)
+      break
     case 'ammoOffhand':
       partial.ammoOffhand = toOptionalNumber(value)
       break
@@ -1373,6 +1375,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'ammoOffhandType':
       partial.ammoOffhandType = toOptionalString(value)
+      break
+    case 'weaponOffhandEquipped':
+      partial.weaponOffhandEquipped = toOptionalNumber(value)
       break
     case 'actionStandard':
       partial.actionStandard = toOptionalNumber(value)
