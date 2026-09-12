@@ -139,7 +139,7 @@ type BarConfig = {
   widthValue: string
 }
 
-type SidebarTabId = 'character' | 'quests' | 'group' | 'affects'
+type SidebarTabId = 'character' | 'gear' | 'quests' | 'group' | 'affects'
 
 type MapPanelTabId = 'graphic' | 'graphicLegend' | 'ascii' | 'asciiLegend'
 
@@ -299,6 +299,7 @@ const DEFAULT_LAYOUT_MAP_PANELS: Record<MapPanelTabId, boolean> = {
 
 const DEFAULT_LAYOUT_SIDEBAR_TABS: Record<SidebarTabId, boolean> = {
   character: true,
+  gear: true,
   quests: true,
   group: true,
   affects: true,
@@ -498,6 +499,7 @@ const MSDP_VARIABLE_GROUPS: Array<{
       { key: 'questInfo', label: 'Quest info' },
       { key: 'bacta', label: 'Bacta (Star Wars)' },
       { key: 'powerCells', label: 'Power cells (Star Wars)' },
+      { key: 'gear', label: 'Gear condition (Star Wars)' },
     ],
   },
   {
@@ -516,6 +518,7 @@ const MSDP_VARIABLE_GROUPS: Array<{
 
 const SIDEBAR_TABS: SidebarTab[] = [
   { id: 'character', label: 'Player info' },
+  { id: 'gear', label: 'Gear' },
   { id: 'quests', label: 'Quests' },
   { id: 'group', label: 'Group' },
   { id: 'affects', label: 'Affects' },
@@ -530,6 +533,7 @@ const LAYOUT_MAP_TOGGLE_OPTIONS: Array<{ id: MapPanelTabId; label: string }> = [
 
 const LAYOUT_SIDEBAR_TOGGLE_OPTIONS: Array<{ id: SidebarTabId; label: string }> = [
   { id: 'character', label: 'Player info tab' },
+  { id: 'gear', label: 'Gear tab' },
   { id: 'group', label: 'Group tab' },
   { id: 'affects', label: 'Affects tab' },
   { id: 'quests', label: 'Quest tab' },
@@ -1950,6 +1954,7 @@ function App() {
         },
         sidebarTabs: {
           character: visible,
+          gear: visible,
           quests: visible,
           group: visible,
           affects: visible,
@@ -2828,7 +2833,7 @@ function App() {
                     <section className="settings-group">
                       <div className="settings-group-header">
                         <h4>Sidebar tabs</h4>
-                        <p>Show or hide the Player info, Group, Affects, and Quest tabs.</p>
+                        <p>Show or hide the Player info, Gear, Group, Affects, and Quest tabs.</p>
                       </div>
 
                       <div className="settings-toggle-list">
@@ -3644,6 +3649,8 @@ function App() {
                     </>
                   ) : null}
 
+                  {resolvedActiveSidebarTab === 'gear' ? <GearPanel value={mudState.gear} /> : null}
+
                   {resolvedActiveSidebarTab === 'quests' ? (
                     mudState.questInfo ? (
                       <QuestInfoPanel value={mudState.questInfo} />
@@ -4189,6 +4196,10 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
           typeof layoutSidebarTabsRecord?.character === 'boolean'
             ? layoutSidebarTabsRecord.character
             : DEFAULT_CLIENT_SETTINGS.layout.sidebarTabs.character,
+        gear:
+          typeof layoutSidebarTabsRecord?.gear === 'boolean'
+            ? layoutSidebarTabsRecord.gear
+            : DEFAULT_CLIENT_SETTINGS.layout.sidebarTabs.gear,
         quests:
           typeof layoutSidebarTabsRecord?.quests === 'boolean'
             ? layoutSidebarTabsRecord.quests
@@ -4967,6 +4978,226 @@ function StarWarsResourceInfo({ mudState }: { mudState: MudState }) {
       ))}
     </div>
   )
+}
+
+type GearSlotId =
+  | 'head'
+  | 'face'
+  | 'ears'
+  | 'neck'
+  | 'shoulders'
+  | 'torso'
+  | 'back'
+  | 'arms'
+  | 'wrists'
+  | 'hands'
+  | 'fingers'
+  | 'waist'
+  | 'legs'
+  | 'feet'
+  | 'mainHand'
+  | 'offHand'
+
+type GearConditionState = 'empty' | 'unknown' | 'repaired' | 'damaged' | 'badly-damaged' | 'broken'
+
+const GEAR_SLOT_DEFINITIONS: Array<{ id: GearSlotId; key: string; label: string }> = [
+  { id: 'head', key: 'HEAD', label: 'Head' },
+  { id: 'face', key: 'FACE', label: 'Face' },
+  { id: 'ears', key: 'EARS', label: 'Ears' },
+  { id: 'neck', key: 'NECK', label: 'Neck' },
+  { id: 'shoulders', key: 'SHOULDERS', label: 'Shoulders' },
+  { id: 'torso', key: 'TORSO', label: 'Torso' },
+  { id: 'back', key: 'BACK', label: 'Back' },
+  { id: 'arms', key: 'ARMS', label: 'Arms' },
+  { id: 'wrists', key: 'WRISTS', label: 'Wrists' },
+  { id: 'hands', key: 'HANDS', label: 'Hands' },
+  { id: 'fingers', key: 'FINGERS', label: 'Fingers' },
+  { id: 'waist', key: 'WAIST', label: 'Waist' },
+  { id: 'legs', key: 'LEGS', label: 'Legs' },
+  { id: 'feet', key: 'FEET', label: 'Feet' },
+  { id: 'mainHand', key: 'MAIN_HAND', label: 'Main hand' },
+  { id: 'offHand', key: 'OFF_HAND', label: 'Off-hand' },
+]
+
+const GEAR_CONDITION_LEGEND: Array<{ state: GearConditionState; label: string }> = [
+  { state: 'repaired', label: 'Fully repaired' },
+  { state: 'damaged', label: 'Damaged' },
+  { state: 'badly-damaged', label: 'Badly damaged' },
+  { state: 'broken', label: 'Broken' },
+  { state: 'empty', label: 'No gear' },
+]
+
+function GearPanel({ value }: { value?: MudValue }) {
+  const conditions = parseGearConditions(value)
+  const hasData = GEAR_SLOT_DEFINITIONS.some(({ id }) => conditions[id] !== undefined)
+
+  if (!hasData) {
+    return <EmptyTabMessage message="No gear condition data reported yet." />
+  }
+
+  return (
+    <div className="gear-panel" aria-label="Gear condition">
+      <div className="gear-legend" aria-label="Gear condition legend">
+        {GEAR_CONDITION_LEGEND.map((entry) => (
+          <span className="gear-legend-item" key={entry.state}>
+            <span className={`gear-legend-swatch gear-slot-${entry.state}`} aria-hidden="true" />
+            {entry.label}
+          </span>
+        ))}
+      </div>
+
+      <svg className="gear-wireframe" viewBox="0 0 240 380" role="img" aria-label="Character gear wireframe">
+        <GearSvgSlot id="back" conditions={conditions}>
+          <path className="gear-slot-shape gear-wireframe-back" d="M80 95C67 104 60 126 59 160L74 220H166L181 160C180 126 173 104 160 95Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="head" conditions={conditions}>
+          <circle className="gear-slot-shape" cx="120" cy="42" r="27" />
+        </GearSvgSlot>
+        <GearSvgSlot id="ears" conditions={conditions}>
+          <circle className="gear-slot-shape" cx="91" cy="45" r="7" />
+          <circle className="gear-slot-shape" cx="149" cy="45" r="7" />
+        </GearSvgSlot>
+        <GearSvgSlot id="face" conditions={conditions}>
+          <path className="gear-slot-shape" d="M101 39C105 28 135 28 139 39V60C134 70 106 70 101 60Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="neck" conditions={conditions}>
+          <rect className="gear-slot-shape" x="106" y="66" width="28" height="22" rx="5" />
+        </GearSvgSlot>
+        <GearSvgSlot id="shoulders" conditions={conditions}>
+          <path className="gear-slot-shape" d="M81 86H159L174 104H66Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="torso" conditions={conditions}>
+          <path className="gear-slot-shape" d="M82 96L106 86H134L158 96L166 218H74Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="arms" conditions={conditions}>
+          <path className="gear-slot-shape" d="M80 96L66 105L40 161L54 168L88 116ZM160 96L174 105L200 161L186 168L152 116Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="wrists" conditions={conditions}>
+          <rect className="gear-slot-shape" x="44" y="155" width="18" height="14" rx="3" />
+          <rect className="gear-slot-shape" x="178" y="155" width="18" height="14" rx="3" />
+        </GearSvgSlot>
+        <GearSvgSlot id="hands" conditions={conditions}>
+          <path className="gear-slot-shape" d="M38 165L51 162L59 175L48 185L37 179ZM202 165L189 162L181 175L192 185L203 179Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="fingers" conditions={conditions}>
+          <circle className="gear-slot-shape" cx="39" cy="184" r="7" />
+          <circle className="gear-slot-shape" cx="201" cy="184" r="7" />
+        </GearSvgSlot>
+        <GearSvgSlot id="mainHand" conditions={conditions}>
+          <path className="gear-slot-shape gear-wireframe-hand" d="M31 174L23 166L18 171L27 184Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="offHand" conditions={conditions}>
+          <path className="gear-slot-shape gear-wireframe-hand" d="M209 174L217 166L222 171L213 184Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="waist" conditions={conditions}>
+          <rect className="gear-slot-shape" x="73" y="212" width="94" height="20" rx="5" />
+        </GearSvgSlot>
+        <GearSvgSlot id="legs" conditions={conditions}>
+          <path className="gear-slot-shape" d="M76 229H116L113 322H79ZM124 229H164L161 322H127Z" />
+        </GearSvgSlot>
+        <GearSvgSlot id="feet" conditions={conditions}>
+          <path className="gear-slot-shape" d="M79 315H113L118 337H73L66 329Z" />
+          <path className="gear-slot-shape" d="M127 315H161L174 329L167 337H122Z" />
+        </GearSvgSlot>
+      </svg>
+
+      <div className="gear-slot-list" role="list" aria-label="Gear slot conditions">
+        {GEAR_SLOT_DEFINITIONS.map(({ id, label }) => {
+          const condition = conditions[id]
+          const state = getGearConditionState(condition)
+          return (
+            <div className={`gear-slot-status gear-slot-${state}`} key={id} role="listitem">
+              <span>{label}</span>
+              <strong>{formatGearCondition(condition)}</strong>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function GearSvgSlot({
+  id,
+  conditions,
+  children,
+}: {
+  id: GearSlotId
+  conditions: Partial<Record<GearSlotId, number>>
+  children: ReactNode
+}) {
+  const condition = conditions[id]
+  const state = getGearConditionState(condition)
+  return (
+    <g className={`gear-slot-group gear-slot-${state}`} aria-label={`${getGearSlotLabel(id)}: ${formatGearCondition(condition)}`}>
+      <title>{`${getGearSlotLabel(id)}: ${formatGearCondition(condition)}`}</title>
+      {children}
+    </g>
+  )
+}
+
+function parseGearConditions(value: MudValue | undefined): Partial<Record<GearSlotId, number>> {
+  if (!isMudRecord(value)) {
+    return {}
+  }
+
+  const conditions: Partial<Record<GearSlotId, number>> = {}
+  for (const definition of GEAR_SLOT_DEFINITIONS) {
+    const rawValue = readAnyKey(value, [definition.key, definition.id])
+    const condition = parseGearCondition(rawValue)
+    if (condition !== undefined) {
+      conditions[definition.id] = condition
+    }
+  }
+  return conditions
+}
+
+function parseGearCondition(value: MudValue | undefined) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Math.max(-1, Math.min(100, Math.round(value)))
+  }
+
+  if (typeof value === 'string' && /^-?\d+$/.test(value.trim())) {
+    return Math.max(-1, Math.min(100, Number(value)))
+  }
+
+  return undefined
+}
+
+function getGearConditionState(condition: number | undefined): GearConditionState {
+  if (condition === undefined) {
+    return 'unknown'
+  }
+  if (condition < 0) {
+    return 'empty'
+  }
+  if (condition <= 0) {
+    return 'broken'
+  }
+  if (condition < 40) {
+    return 'badly-damaged'
+  }
+  if (condition < 100) {
+    return 'damaged'
+  }
+  return 'repaired'
+}
+
+function formatGearCondition(condition: number | undefined) {
+  if (condition === undefined) {
+    return 'Unknown'
+  }
+  if (condition < 0) {
+    return 'Empty'
+  }
+  if (condition <= 0) {
+    return 'Broken (0%)'
+  }
+  return `${condition}%`
+}
+
+function getGearSlotLabel(id: GearSlotId) {
+  return GEAR_SLOT_DEFINITIONS.find((definition) => definition.id === id)?.label ?? id
 }
 
 type StatProps = {

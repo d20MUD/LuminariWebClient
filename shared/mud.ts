@@ -111,6 +111,7 @@ export interface MudState {
   ammoOffhandMax?: number
   ammoOffhandType?: string
   weaponOffhandEquipped?: number
+  gear?: MudValue
   actionStandard?: number
   actionMove?: number
   actionQuick?: number
@@ -171,6 +172,7 @@ export const defaultMsdpVariables = {
   ammoOffhandMax: 'AMMO_OFFHAND_MAX',
   ammoOffhandType: 'AMMO_OFFHAND_TYPE',
   weaponOffhandEquipped: 'WEAPON_OFFHAND_EQUIPPED',
+  gear: 'GEAR',
   actionStandard: 'ACTION_STANDARD',
   actionMove: 'ACTION_MOVE',
   actionQuick: 'ACTION_QUICK',
@@ -188,6 +190,7 @@ export const starWarsMsdpVariableKeys = [
   'ammoOffhandMax',
   'ammoOffhandType',
   'weaponOffhandEquipped',
+  'gear',
   'actionStandard',
   'actionMove',
   'actionQuick',
@@ -290,6 +293,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
       raw.weaponOffhandEquipped,
       defaultMsdpVariables.weaponOffhandEquipped,
     ),
+    gear: normalizeMsdpVariableValue(raw.gear, defaultMsdpVariables.gear),
     actionStandard: normalizeMsdpVariableValue(raw.actionStandard, defaultMsdpVariables.actionStandard),
     actionMove: normalizeMsdpVariableValue(raw.actionMove, defaultMsdpVariables.actionMove),
     actionQuick: normalizeMsdpVariableValue(raw.actionQuick, defaultMsdpVariables.actionQuick),

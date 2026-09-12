@@ -744,7 +744,7 @@
 
 .tab-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.45rem;
   padding: 0.8rem 0.8rem 0;
 }
@@ -775,6 +775,118 @@
   margin: 0;
   padding: 0 1rem 1rem;
   color: var(--muted);
+}
+
+.gear-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 0 0.8rem 0.8rem;
+}
+
+.gear-legend {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem 0.55rem;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.gear-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.gear-legend-swatch {
+  width: 0.72rem;
+  height: 0.72rem;
+  flex: 0 0 auto;
+  border: 1px solid currentColor;
+  border-radius: 0.2rem;
+  background: currentColor;
+  box-shadow: 0 0 0.45rem currentColor;
+}
+
+.gear-wireframe {
+  display: block;
+  width: min(100%, 15rem);
+  height: auto;
+  max-height: 26rem;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.gear-slot-group {
+  color: rgba(100, 116, 139, 0.52);
+}
+
+.gear-slot-group .gear-slot-shape {
+  fill: currentColor;
+  fill-opacity: 0.23;
+  stroke: currentColor;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.gear-slot-group .gear-wireframe-back {
+  fill-opacity: 0.1;
+  stroke-dasharray: 5 4;
+}
+
+.gear-slot-group .gear-wireframe-hand {
+  fill-opacity: 0.32;
+}
+
+.gear-slot-repaired {
+  color: #22c55e;
+}
+
+.gear-slot-damaged {
+  color: #facc15;
+}
+
+.gear-slot-badly-damaged {
+  color: #f97316;
+}
+
+.gear-slot-broken {
+  color: #ef4444;
+}
+
+.gear-slot-empty {
+  color: rgba(100, 116, 139, 0.52);
+}
+
+.gear-slot-unknown {
+  color: rgba(148, 163, 184, 0.4);
+}
+
+.gear-slot-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.35rem;
+}
+
+.gear-slot-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid color-mix(in srgb, currentColor 35%, var(--border));
+  border-radius: 0.45rem;
+  background: rgba(15, 23, 42, 0.34);
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.gear-slot-status strong {
+  color: currentColor;
+  font-size: 0.68rem;
+  white-space: nowrap;
 }
 
 .tab-data-block,

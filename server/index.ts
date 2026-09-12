@@ -69,7 +69,7 @@ type AutoLoginState = {
   accountName: string
   accountPassword: string
   characterName: string
-  stage: 'awaiting-password' | 'awaiting-character' | 'finishing-login'
+  stage: 'awaiting-account-name' | 'awaiting-account-response' | 'awaiting-character' | 'finishing-login'
   output: string
   continueCount: number
 }
@@ -363,14 +363,13 @@ class MudSession {
       accountName: account,
       accountPassword,
       characterName: character,
-      // Sending the account name now is safe even before the TCP connect event:
-      // Node queues writes until the socket is established. It also avoids
-      // losing a very fast account prompt before this browser message arrives.
-      stage: 'awaiting-password',
+      // Star Wars sends telnet negotiation before the account prompt. Waiting
+      // for that prompt is important: writing credentials immediately after
+      // opening the TCP socket can be consumed by the negotiation handshake.
+      stage: 'awaiting-account-name',
       output: '',
       continueCount: 0,
     }
-    this.sendAutoLoginInput(account)
   }
 
   sendStatus(status: ConnectionStatus, detail: string) {
@@ -560,11 +559,30 @@ class MudSession {
       return
     }
 
-    if (login.stage === 'awaiting-password' && /password\s*:\s*$/im.test(login.output)) {
-      this.sendAutoLoginInput(login.accountPassword)
-      login.stage = 'awaiting-character'
+    if (login.stage === 'awaiting-account-name' && isAccountNamePrompt(login.output)) {
+      this.sendAutoLoginInput(login.accountName)
+      login.stage = 'awaiting-account-response'
       login.output = ''
       return
+    }
+
+    if (login.stage === 'awaiting-account-response') {
+      if (/did i get that right[\s\S]*\(\s*y\s*\/\s*n\s*\)\s*\??\s*$/im.test(login.output)) {
+        // A saved account should already exist. Never confirm a new account
+        // from an auto-login profile, since doing so would create an account
+        // when the saved name was mistyped or removed.
+        this.sendAutoLoginInput('N')
+        this.autoLogin = null
+        this.sendStatus('error', 'The saved account was not found. Continue with manual login.')
+        return
+      }
+
+      if (/password\s*:\s*$/im.test(login.output)) {
+        this.sendAutoLoginInput(login.accountPassword)
+        login.stage = 'awaiting-character'
+        login.output = ''
+        return
+      }
     }
 
     if (login.stage === 'awaiting-character') {
@@ -910,6 +928,11 @@ function isValidAutoLoginValue(value: string, minimumLength: number, maximumLeng
 function isAutoLoginSupportedHost(host: string) {
   const normalizedHost = host.trim().toLowerCase()
   return normalizedHost === 'krynn.d20mud.com' || normalizedHost === 'faerun.d20mud.com' || normalizedHost === 'starwars.d20mud.com'
+}
+
+function isAccountNamePrompt(output: string) {
+  return /enter\s+your\s+account\s+name\b[^\r\n]*:\s*$/im.test(output)
+    || /(?:account\s+)?name\s*:\s*$/im.test(output)
 }
 
 function stripMudLoginFormatting(value: string) {
@@ -1378,6 +1401,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'weaponOffhandEquipped':
       partial.weaponOffhandEquipped = toOptionalNumber(value)
+      break
+    case 'gear':
+      partial.gear = value
       break
     case 'actionStandard':
       partial.actionStandard = toOptionalNumber(value)
