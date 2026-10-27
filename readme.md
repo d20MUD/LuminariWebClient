@@ -156,6 +156,8 @@ The main app settings file is:
 shared/app-settings.ts
 ```
 
+Links can pre-select a MUD with the `mud` query parameter, for example `http://play.d20mud.com:3210/?mud=krynn`. Supported preset IDs are `krynn`, `faerun`, `starwars`, and `luminari`; `custom` selects the saved custom connection. The parameter overrides the saved default for that page load and selects the matching host, port, and skin. Missing or unknown values use the normal saved default. It does not automatically connect or change the saved default.
+
 The browser now loads these settings from the server at runtime through `/api/settings`, so changes to MUD presets, defaults, and personalization are picked up after restarting the server. A full frontend rebuild is not required just to update the dropdown list or branding text.
 
 It contains:

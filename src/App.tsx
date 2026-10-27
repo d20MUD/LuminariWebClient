@@ -637,7 +637,7 @@ const ASCII_MAP_LEGEND_ITEMS: MapLegendItem[] = [
 
 function App() {
   const initialClientSettings = loadClientSettingsFromCookies()
-  const initialConnectionDefaults = resolveConnectionDefaults(appSettings, initialClientSettings)
+  const initialConnectionDefaults = resolveConnectionDefaults(appSettings, initialClientSettings, getUrlMudId())
   const [uiSettings, setUiSettings] = useState<AppSettings>(appSettings)
   const [mudState, setMudState] = useState<MudState>({})
   const [host, setHost] = useState(initialConnectionDefaults.host)
@@ -779,7 +779,7 @@ function App() {
         }
 
         setUiSettings(settings)
-        const connectionDefaults = resolveConnectionDefaults(settings, clientSettingsRef.current)
+        const connectionDefaults = resolveConnectionDefaults(settings, clientSettingsRef.current, getUrlMudId())
         setHost(connectionDefaults.host)
         setPort(connectionDefaults.port)
         setSelectedMudId(connectionDefaults.selectedMudId)
@@ -4726,8 +4726,21 @@ function normalizeMudPort(value: number | undefined) {
   return Math.max(1, Math.min(65535, Math.trunc(value)))
 }
 
-function resolveConnectionDefaults(settings: AppSettings, clientSettings: ClientSettings) {
-  if (clientSettings.connection.defaultMudId === CUSTOM_MUD_VALUE) {
+function getUrlMudId() {
+  if (typeof window === 'undefined') {
+    return undefined
+  }
+
+  const mudId = new URLSearchParams(window.location.search).get('mud')?.trim().toLowerCase()
+  return mudId === 'custom' ? CUSTOM_MUD_VALUE : mudId
+}
+
+function resolveConnectionDefaults(settings: AppSettings, clientSettings: ClientSettings, requestedMudId?: string | null) {
+  const validRequestedMudId = requestedMudId === CUSTOM_MUD_VALUE ||
+    settings.connection.muds.some((mud) => mud.id === requestedMudId)
+  const defaultMudId = validRequestedMudId ? requestedMudId : clientSettings.connection.defaultMudId
+
+  if (defaultMudId === CUSTOM_MUD_VALUE) {
     return {
       selectedMudId: CUSTOM_MUD_VALUE,
       host: normalizeMudHost(clientSettings.connection.customHost),
@@ -4735,7 +4748,7 @@ function resolveConnectionDefaults(settings: AppSettings, clientSettings: Client
     }
   }
 
-  const preset = settings.connection.muds.find((mud) => mud.id === clientSettings.connection.defaultMudId)
+  const preset = settings.connection.muds.find((mud) => mud.id === defaultMudId)
   if (preset) {
     return {
       selectedMudId: preset.id,
