@@ -1,0 +1,146 @@
+/* Game skins share semantic UI colors; ANSI output and map/gauge colors remain independent. */
+:root[data-mud-theme='krynn'] {
+  --surface-rgb: 38, 23, 24;
+  --deep-rgb: 15, 9, 12;
+  --accent-rgb: 201, 151, 74;
+  --accent-secondary-rgb: 137, 42, 47;
+  --accent-light-rgb: 244, 209, 149;
+  --bg: #261718;
+  --panel: rgba(38, 23, 24, 0.88);
+  --terminal: #0f090c;
+  --text: #f4e8d5;
+  --muted: #bca895;
+  --border: rgba(201, 151, 74, 0.28);
+  --accent: #d7ab65;
+  --terminal-text: #eee2ce;
+  --page-background:
+    radial-gradient(ellipse at 12% 0%, rgba(153, 39, 46, 0.48), transparent 55%),
+    radial-gradient(circle at 88% 12%, rgba(218, 175, 104, 0.22) 0 3%, transparent 3.3%),
+    radial-gradient(circle at 80% 18%, rgba(183, 58, 67, 0.2) 0 2%, transparent 2.3%),
+    linear-gradient(155deg, #301c1d, #100a0e 75%);
+}
+
+:root[data-mud-theme='faerun'] {
+  --surface-rgb: 17, 36, 32;
+  --deep-rgb: 5, 16, 16;
+  --accent-rgb: 203, 172, 98;
+  --accent-secondary-rgb: 39, 111, 88;
+  --accent-light-rgb: 244, 220, 160;
+  --bg: #112420;
+  --panel: rgba(17, 36, 32, 0.88);
+  --terminal: #051010;
+  --text: #e9eedb;
+  --muted: #a6b9a7;
+  --border: rgba(203, 172, 98, 0.26);
+  --accent: #d4b66f;
+  --terminal-text: #e3edda;
+  --page-background:
+    radial-gradient(ellipse at 20% 0%, rgba(57, 129, 88, 0.4), transparent 55%),
+    repeating-linear-gradient(125deg, transparent 0 85px, rgba(164, 190, 143, 0.035) 86px 87px, transparent 88px 170px),
+    linear-gradient(160deg, #173c31, #071312 80%);
+}
+
+:root[data-mud-theme='starwars'] {
+  --surface-rgb: 13, 23, 34;
+  --deep-rgb: 2, 5, 10;
+  --accent-rgb: 68, 204, 243;
+  --accent-secondary-rgb: 28, 93, 147;
+  --accent-light-rgb: 169, 237, 255;
+  --bg: #0d1722;
+  --panel: rgba(13, 23, 34, 0.9);
+  --terminal: #02050a;
+  --text: #e4f4ff;
+  --muted: #95afc2;
+  --border: rgba(68, 204, 243, 0.28);
+  --accent: #ffe071;
+  --terminal-text: #dcefff;
+  --page-background:
+    radial-gradient(1px 1px at 17px 29px, #cadcea 90%, transparent),
+    radial-gradient(1px 1px at 83px 113px, #8bb5d5 90%, transparent),
+    radial-gradient(2px 2px at 181px 57px, #e0efff 70%, transparent),
+    radial-gradient(ellipse at top right, #12304d, #02050a 70%);
+}
+
+:root[data-mud-theme='luminari'] {
+  --surface-rgb: 28, 23, 49;
+  --deep-rgb: 9, 8, 22;
+  --accent-rgb: 185, 143, 255;
+  --accent-secondary-rgb: 48, 140, 119;
+  --accent-light-rgb: 223, 204, 255;
+  --bg: #1c1731;
+  --panel: rgba(28, 23, 49, 0.86);
+  --terminal: #090816;
+  --text: #eee8ff;
+  --muted: #b2a9c9;
+  --border: rgba(185, 143, 255, 0.26);
+  --accent: #c5a1ff;
+  --terminal-text: #e8e2fa;
+  --page-background:
+    radial-gradient(ellipse at 12% 0%, rgba(130, 68, 199, 0.45), transparent 50%),
+    radial-gradient(ellipse at 90% 30%, rgba(36, 150, 122, 0.28), transparent 55%),
+    linear-gradient(165deg, #241b3e, #090816 85%);
+}
+
+/* Local website artwork sits behind a dark wash so controls stay legible. */
+:root[data-mud-theme='krynn'] { --skin-image: url('/skins/krynn-background.webp'); }
+:root[data-mud-theme='faerun'] { --skin-image: url('/skins/faerun-background.jpg'); }
+:root[data-mud-theme='starwars'] { --skin-image: url('/skins/starwars-background.jpg'); }
+:root[data-mud-theme='luminari'] { --skin-image: url('/skins/luminari-background.webp'); }
+
+html[data-mud-theme]:not([data-mud-theme='default']) body {
+  background-image:
+    linear-gradient(180deg, rgba(var(--deep-rgb), 0.4), rgba(var(--deep-rgb), 0.82)),
+    var(--skin-image);
+  background-color: var(--bg);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+.game-branding {
+  min-width: 0;
+}
+
+.game-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  height: 5rem;
+  margin-bottom: 0.4rem;
+}
+
+.game-logo img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: min(22rem, 100%);
+  max-height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+}
+
+.game-logo-luminari img {
+  width: 3.5rem;
+  height: 3.5rem;
+}
+
+.game-logo-luminari span {
+  color: var(--text);
+  font-family: Georgia, serif;
+  font-size: clamp(1.3rem, 2.2vw, 2rem);
+  letter-spacing: 0.025em;
+}
+
+.game-branding-themed h1 {
+  font-size: 0.95rem;
+}
+
+.game-branding-themed .subtitle {
+  font-size: 0.75rem;
+}
+
+@media (max-width: 720px) {
+  .game-logo { height: 3.75rem; }
+  .game-logo img { max-width: min(18rem, 100%); }
+}

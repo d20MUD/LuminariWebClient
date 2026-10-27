@@ -26,6 +26,12 @@ import './App.css'
 const DEFAULT_HOST = appSettings.connection.defaultHost
 const DEFAULT_PORT = appSettings.connection.defaultPort
 const CUSTOM_MUD_VALUE = '__custom__'
+const MUD_LOGOS: Record<string, string> = {
+  krynn: '/skins/krynn-logo.png',
+  faerun: '/skins/faerun-logo.png',
+  starwars: '/skins/starwars-logo.png',
+  luminari: '/skins/luminari-logo.svg',
+}
 const DEFAULT_TERMINAL_HISTORY_LINES = 200
 const MAX_TERMINAL_HISTORY_LINES = 2000
 const COMMAND_HISTORY_LIMIT = 100
@@ -638,6 +644,14 @@ function App() {
   const [port, setPort] = useState(initialConnectionDefaults.port)
   const [selectedMudId, setSelectedMudId] = useState(initialConnectionDefaults.selectedMudId)
   const isStarWarsConnection = selectedMudId === 'starwars'
+
+  useLayoutEffect(() => {
+    const theme = ['krynn', 'faerun', 'starwars', 'luminari'].includes(selectedMudId)
+      ? selectedMudId
+      : 'default'
+    document.documentElement.dataset.mudTheme = theme
+    return () => { delete document.documentElement.dataset.mudTheme }
+  }, [selectedMudId])
   const [command, setCommand] = useState('')
   const [commandHistory, setCommandHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState<number | null>(null)
@@ -3212,7 +3226,13 @@ function App() {
         <div className="app-header" data-prevent-command-focus>
           <header className="topbar">
             {showBranding ? (
-              <div>
+              <div className={`game-branding${MUD_LOGOS[selectedMudId] ? ' game-branding-themed' : ''}`}>
+                {MUD_LOGOS[selectedMudId] ? (
+                  <div className={`game-logo game-logo-${selectedMudId}`}>
+                    <img src={MUD_LOGOS[selectedMudId]} alt={selectedMudPreset?.name ?? 'Selected MUD'} />
+                    {selectedMudId === 'luminari' ? <span aria-hidden="true">LuminariMUD</span> : null}
+                  </div>
+                ) : null}
                 <p className="eyebrow">{uiSettings.personalization.eyebrow}</p>
                 <h1>{uiSettings.personalization.title}</h1>
                 <p className="subtitle">{uiSettings.personalization.subtitle}</p>

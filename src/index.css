@@ -1,3 +1,5 @@
+@import './themes.css';
+
 :root {
   color-scheme: dark;
   font-family:
@@ -9,8 +11,16 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  --surface-rgb: 15, 23, 42;
+  --deep-rgb: 2, 6, 23;
+  --accent-rgb: 168, 85, 247;
+  --accent-secondary-rgb: 124, 58, 237;
+  --accent-light-rgb: 216, 180, 254;
+  --page-background:
+    radial-gradient(circle at top, rgba(91, 33, 182, 0.32), transparent 36%),
+    linear-gradient(180deg, #0f172a 0%, #020617 100%);
   --bg: #0f172a;
-  --panel: rgba(15, 23, 42, 0.82);
+  --panel: rgba(var(--surface-rgb), 0.82);
   --terminal: #020617;
   --text: #e2e8f0;
   --muted: #94a3b8;
@@ -20,7 +30,7 @@
   --mono:
     'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'SFMono-Regular', Consolas, monospace;
   --shadow:
-    0 24px 48px rgba(2, 6, 23, 0.45),
+    0 24px 48px rgba(var(--deep-rgb), 0.45),
     inset 0 1px 0 rgba(255, 255, 255, 0.03);
   --status-idle-bg: rgba(148, 163, 184, 0.14);
   --status-idle-text: #cbd5f5;
@@ -47,9 +57,7 @@ body {
   margin: 0;
   min-height: 100dvh;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at top, rgba(91, 33, 182, 0.32), transparent 36%),
-    linear-gradient(180deg, #0f172a 0%, #020617 100%);
+  background: var(--page-background);
   color: var(--text);
 }
 
@@ -60,10 +68,10 @@ select {
 }
 
 button {
-  border: 1px solid rgba(168, 85, 247, 0.34);
+  border: 1px solid rgba(var(--accent-rgb), 0.34);
   border-radius: 0.85rem;
   padding: 0.85rem 1rem;
-  background: linear-gradient(180deg, rgba(168, 85, 247, 0.24), rgba(124, 58, 237, 0.18));
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.24), rgba(var(--accent-secondary-rgb), 0.18));
   color: var(--text);
   cursor: pointer;
   transition:
@@ -74,7 +82,7 @@ button {
 
 button:hover:not(:disabled) {
   transform: translateY(-1px);
-  border-color: rgba(216, 180, 254, 0.8);
+  border-color: rgba(var(--accent-light-rgb), 0.8);
 }
 
 button:disabled {
@@ -88,13 +96,13 @@ select {
   border: 1px solid var(--border);
   border-radius: 0.85rem;
   padding: 0.85rem 1rem;
-  background: rgba(15, 23, 42, 0.65);
+  background: rgba(var(--surface-rgb), 0.65);
   color: var(--text);
 }
 
 input:focus,
 select:focus {
-  outline: 2px solid rgba(168, 85, 247, 0.5);
+  outline: 2px solid rgba(var(--accent-rgb), 0.5);
   outline-offset: 1px;
 }
 
