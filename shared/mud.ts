@@ -94,6 +94,7 @@ export interface MudState {
   affects?: MudValue
   cooldowns?: MudValue
   group?: MudValue
+  helpInfo?: MudValue
   questInfo?: MudValue
   opponentName?: string
   opponentHealth?: number
@@ -155,6 +156,7 @@ export const defaultMsdpVariables = {
   affects: 'AFFECTS',
   cooldowns: 'COOLDOWNS',
   group: 'GROUP',
+  helpInfo: 'HELP_INFO',
   questInfo: 'QUEST_INFO',
   opponentName: 'OPPONENT_NAME',
   opponentHealth: 'OPPONENT_HEALTH',
@@ -273,6 +275,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     affects: normalizeMsdpVariableValue(raw.affects, defaultMsdpVariables.affects),
     cooldowns: normalizeMsdpVariableValue(raw.cooldowns, defaultMsdpVariables.cooldowns),
     group: normalizeMsdpVariableValue(raw.group, defaultMsdpVariables.group),
+    helpInfo: normalizeMsdpVariableValue(raw.helpInfo, defaultMsdpVariables.helpInfo),
     questInfo: normalizeMsdpVariableValue(raw.questInfo, defaultMsdpVariables.questInfo),
     opponentName: normalizeMsdpVariableValue(raw.opponentName, defaultMsdpVariables.opponentName),
     opponentHealth: normalizeMsdpVariableValue(raw.opponentHealth, defaultMsdpVariables.opponentHealth),

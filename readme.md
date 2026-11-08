@@ -82,6 +82,17 @@ Run in development:
 npm run dev
 ```
 
+This starts the web frontend at **http://localhost:3211** (or
+**http://play.d20mud.com:3211** remotely), with the development
+WebSocket/API proxy on port **3212**. The Krynn preset and default MUD connection
+use **krynn.d20mud.com:4301**. Select Krynn if your saved default selects another
+MUD. You can also open `http://localhost:3211/?mud=krynn` to select it explicitly.
+
+Development settings come from `getAppSettings(true)` in
+`shared/app-settings.ts`; the browser, Vite proxy, and Node server share them.
+Production (`npm run build` followed by `npm start`) keeps web port **3210** and
+Krynn MUD port **4300**. Other MUD presets keep their configured ports.
+
 This starts:
 
 - the Vite frontend on the client port from `shared/app-settings.ts`

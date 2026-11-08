@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'node:http'
 import { WebSocket, WebSocketServer } from 'ws'
 import type { RawData } from 'ws'
-import { appSettings } from '../shared/app-settings.ts'
+import { getAppSettings } from '../shared/app-settings.ts'
 import {
   defaultMsdpVariables,
   isWildernessRoomVnum,
@@ -23,6 +23,9 @@ import type {
   MudValue,
   ServerMessage,
 } from '../shared/mud.ts'
+
+const isDevelopment = process.env.NODE_ENV === 'development'
+const appSettings = getAppSettings(isDevelopment)
 
 const IAC = 255
 const DONT = 254
@@ -102,11 +105,20 @@ app.get('/api/settings', (_request, response) => {
   response.json(appSettings)
 })
 
-app.use(express.static(clientDist))
-
-app.get(/^(?!\/ws).*/, (_request, response) => {
-  response.sendFile(path.join(clientDist, 'index.html'))
-})
+if (isDevelopment) {
+  // tsx runs from server/, where ../client does not exist. Vite serves the
+  // source index.html and assets; only production serves dist/client here.
+  app.get(/^(?!\/ws).*/, (request, response) => {
+    const frontend = new URL(request.originalUrl, `${request.protocol}://${request.get('host')}`)
+    frontend.port = String(appSettings.ports.client)
+    response.redirect(307, frontend.toString())
+  })
+} else {
+  app.use(express.static(clientDist))
+  app.get(/^(?!\/ws).*/, (_request, response) => {
+    response.sendFile(path.join(clientDist, 'index.html'))
+  })
+}
 
 wss.on('connection', (socket) => {
   const session = new MudSession(socket)
@@ -196,6 +208,8 @@ class MudSession {
   private msdpInitialized = false
   private msdpVariables: MsdpVariableMap = normalizeMsdpVariableMap(defaultMsdpVariables)
   private starWarsMode = false
+  private helpModalsEnabled = false
+  private isKrynnConnection = false
   private autoLoginSupported = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -221,6 +235,9 @@ class MudSession {
     this.msdpInitialized = false
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
     this.starWarsMode = starWarsMode
+    this.helpModalsEnabled = appSettings.connection.muds.some((mud) =>
+      mud.host.toLowerCase() === host.trim().toLowerCase() && mud.features?.helpModal === true)
+    this.isKrynnConnection = host.trim().toLowerCase() === 'krynn.d20mud.com'
     this.autoLoginSupported = isAutoLoginSupportedHost(host)
     this.autoLogin = null
     this.sendStatus('connecting', `Connecting to ${host}:${port}...`)
@@ -251,7 +268,9 @@ class MudSession {
         this.send({ type: 'state', state: stateUpdate })
       },
       onMsdpReady: () => {
-        if (this.msdpInitialized) {
+        // Krynn renegotiates MSDP after copyover: its report subscriptions were
+        // reset even though this TCP connection and proxy session survived.
+        if (this.msdpInitialized && !this.isKrynnConnection && !this.helpModalsEnabled) {
           return
         }
 
@@ -415,7 +434,7 @@ class MudSession {
       return
     }
 
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)) {
+    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode, this.helpModalsEnabled)) {
       this.sendMsdpPair('SEND', variable)
     }
   }
@@ -456,7 +475,7 @@ class MudSession {
   }
 
   private applyMsdpConfiguration() {
-    const variables = getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode)
+    const variables = getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode, this.helpModalsEnabled)
 
     if (!this.starWarsMode) {
       for (const variable of variables) {
@@ -557,7 +576,7 @@ class MudSession {
       return
     }
 
-    login.output = `${login.output}${stripMudLoginFormatting(text)}`.slice(-16384)
+    login.output = stripMudLoginFormatting(`${login.output}${text}`).slice(-16384)
 
     if (/wrong password|invalid account name|does not exist|disconnecting/i.test(login.output)) {
       this.autoLogin = null
@@ -595,6 +614,27 @@ class MudSession {
       if (slot) {
         this.sendAutoLoginInput(slot)
         login.stage = 'finishing-login'
+        login.output = ''
+      }
+      return
+    }
+
+    if (login.stage === 'finishing-login' && this.isKrynnConnection) {
+      // Reconnecting skips the character menu. Never send a menu choice into play.
+      if (/\breconnecting(?: to unswitched char)?\./i.test(login.output)) {
+        this.autoLogin = null
+        return
+      }
+      if (isKrynnCharacterMenu(login.output)) {
+        this.sendAutoLoginInput('1')
+        this.autoLogin = null
+        return
+      }
+      // Krynn's 'Character loaded' and MOTD prompts both precede CON_RMOTD.
+      // They require one Return, even when they arrive in separate TCP chunks.
+      if (login.continueCount === 0 && /press\s+(?:(?:enter|return)[^\r\n]*continue|return)/i.test(login.output)) {
+        this.sendAutoLoginInput('')
+        login.continueCount += 1
         login.output = ''
       }
       return
@@ -941,6 +981,12 @@ function isAccountNamePrompt(output: string) {
     || /(?:account\s+)?name\s*:\s*$/im.test(output)
 }
 
+function isKrynnCharacterMenu(output: string) {
+  return /chronicles\s+of\s+krynn\s+character\s+menu/i.test(output)
+    && /^\s*1\)\s*enter\s+the\s+game\./im.test(output)
+    && /make\s+your\s+choice\s*:/i.test(output)
+}
+
 function stripMudLoginFormatting(value: string) {
   return value
     .replace(ANSI_ESCAPE_PATTERN, '')
@@ -1196,9 +1242,10 @@ function normalizeScalar(value: string): MudValue {
   return value
 }
 
-function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean) {
+function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean, helpModalsEnabled = false) {
   const variables = new Set(
     Object.entries(msdpVariables)
+      .filter(([key]) => key !== 'helpInfo' || helpModalsEnabled)
       .filter(([key]) => starWarsMode || !starWarsMsdpVariableKeys.includes(key as (typeof starWarsMsdpVariableKeys)[number]))
       .map(([, value]) => value.trim())
       .filter(Boolean),
@@ -1356,6 +1403,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'group':
       partial.group = value
+      break
+    case 'helpInfo':
+      partial.helpInfo = value
       break
     case 'questInfo':
       partial.questInfo = value

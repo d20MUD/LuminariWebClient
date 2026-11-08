@@ -4,6 +4,7 @@ export type MudPreset = {
   host: string
   port: number
   description?: string
+  features?: { questDetails?: boolean; helpModal?: boolean }
 }
 
 export type AppSettings = {
@@ -37,6 +38,7 @@ export const appSettings: AppSettings = {
     muds: [
       {
         id: 'krynn',
+        features: { questDetails: true, helpModal: true },
         name: 'Chronicles of Krynn',
         host: 'krynn.d20mud.com',
         port: 4300,
@@ -71,4 +73,20 @@ export const appSettings: AppSettings = {
     title: 'd20MUD Web Clients',
     subtitle: 'by GickerLDS aka Steve Squires copyright 2026',
   },
+}
+
+/** Shared by Vite, the browser fallback, and the development proxy. */
+export function getAppSettings(development: boolean): AppSettings {
+  if (!development) return appSettings
+  return {
+    ...appSettings,
+    ports: { ...appSettings.ports, client: 3211, server: 3212 },
+    connection: {
+      ...appSettings.connection,
+      defaultPort: 4301,
+      muds: appSettings.connection.muds.map((mud) =>
+        mud.id === 'krynn' ? { ...mud, port: 4301 } : mud,
+      ),
+    },
+  }
 }

@@ -226,6 +226,8 @@
 
 .terminal-output {
   flex: 1;
+  min-width: 0;
+  overflow-anchor: none;
   min-height: 0;
   margin: 1rem;
   padding: 1rem;
@@ -2022,4 +2024,70 @@
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+.quest-name-button {
+  display: inline-block;
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0.2rem;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+  overflow-wrap: anywhere;
+}
+
+.quest-name-button:hover { opacity: 0.8; }
+.quest-name-button:focus-visible { outline: 2px solid var(--accent, #60a5fa); outline-offset: 3px; }
+
+.quest-details-modal {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
+  margin: auto;
+  padding: 1.25rem;
+  color: var(--terminal-text, #f8fafc);
+  background: var(--terminal, #111827);
+  overflow: auto;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.quest-details-modal::backdrop { background: rgba(0, 0, 0, 0.7); }
+.quest-details-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; }
+.quest-details-header h2 { margin: 0; font-size: 1.25rem; }
+.quest-details-header button { flex-shrink: 0; }
+.quest-details-description { color: var(--muted); }
+.quest-details-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.5rem 1rem; }
+.quest-details-facts dt { color: var(--muted); font-weight: 700; }
+.quest-details-facts dd { margin: 0; }
+.quest-details-journal { white-space: pre-line; line-height: 1.65; }
+.quest-details-description { white-space: pre-line; }
+
+@media (max-width: 480px) {
+  .quest-details-facts { grid-template-columns: 1fr; gap: 0.25rem; }
+  .quest-details-facts dd + dt { margin-top: 0.5rem; }
+}
+
+/* A measurable content box lets late text wrapping/font changes keep the last
+   line visible without changing the terminal's scrollback behavior. */
+.terminal-output-content { min-height: 100%; }
+
+.help-details-modal { width: min(56rem, calc(100vw - 2rem)); }
+.help-details-body { line-height: 1.65; }
+.help-details-body p { white-space: normal; }
+.help-details-body pre {
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: rgba(0, 0, 0, 0.16);
+  font: 0.85rem/1.5 var(--mono);
+  white-space: pre;
 }

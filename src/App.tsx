@@ -2,7 +2,7 @@ import AnsiToHtml from 'ansi-to-html'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ChangeEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { ReactNode } from 'react'
-import { appSettings } from '../shared/app-settings.ts'
+import { getAppSettings } from '../shared/app-settings.ts'
 import type { AppSettings } from '../shared/app-settings.ts'
 import {
   defaultMsdpVariables,
@@ -21,7 +21,11 @@ import type {
   MudValue,
   ServerMessage,
 } from '../shared/mud.ts'
+import { createTerminalScrollController } from './terminal-scroll.ts'
+import type { TerminalScrollController } from './terminal-scroll.ts'
 import './App.css'
+
+const appSettings = getAppSettings(import.meta.env.DEV)
 
 const DEFAULT_HOST = appSettings.connection.defaultHost
 const DEFAULT_PORT = appSettings.connection.defaultPort
@@ -35,7 +39,6 @@ const MUD_LOGOS: Record<string, string> = {
 const DEFAULT_TERMINAL_HISTORY_LINES = 200
 const MAX_TERMINAL_HISTORY_LINES = 2000
 const COMMAND_HISTORY_LIMIT = 100
-const TERMINAL_BOTTOM_SCROLL_TOLERANCE = 24
 const AUTOMATION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 const AUTOMATION_COOKIE_CHUNK_SIZE = 3000
 const AUTOMATION_RECURSION_LIMIT = 10
@@ -640,6 +643,8 @@ function App() {
   const initialConnectionDefaults = resolveConnectionDefaults(appSettings, initialClientSettings, getUrlMudId())
   const [uiSettings, setUiSettings] = useState<AppSettings>(appSettings)
   const [mudState, setMudState] = useState<MudState>({})
+  const [helpModal, setHelpModal] = useState<HelpInfo | null>(null)
+  const lastHelpResponseIdRef = useRef<string | null>(null)
   const [host, setHost] = useState(initialConnectionDefaults.host)
   const [port, setPort] = useState(initialConnectionDefaults.port)
   const [selectedMudId, setSelectedMudId] = useState(initialConnectionDefaults.selectedMudId)
@@ -679,6 +684,8 @@ function App() {
   const [activeMapTab, setActiveMapTab] = useState<MapPanelTabId>(() => getDefaultMapPanelTab(initialClientSettings))
   const socketRef = useRef<WebSocket | null>(null)
   const terminalRef = useRef<HTMLDivElement | null>(null)
+  const terminalContentRef = useRef<HTMLDivElement | null>(null)
+  const terminalScrollRef = useRef<TerminalScrollController | null>(null)
   const chatRef = useRef<HTMLDivElement | null>(null)
   const commandInputRef = useRef<HTMLInputElement | null>(null)
   const configFileInputRef = useRef<HTMLInputElement | null>(null)
@@ -689,7 +696,6 @@ function App() {
   const triggersRef = useRef<TriggerDefinition[]>(triggers)
   const clientSettingsRef = useRef(clientSettings)
   const terminalHistoryLineLimitRef = useRef(clientSettings.terminal.maxHistoryLines)
-  const terminalShouldFollowOutputRef = useRef(true)
   const isStarWarsConnectionRef = useRef(isStarWarsConnection)
   const pendingStarWarsChatSpeakerRef = useRef('')
   const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
@@ -936,9 +942,7 @@ function App() {
             return
           }
 
-          const shouldFollowOutput =
-            clientSettingsRef.current.terminal.autoScroll && isTerminalScrolledToBottom(terminalRef.current)
-          terminalShouldFollowOutputRef.current = shouldFollowOutput
+          const shouldFollowOutput = terminalScrollRef.current?.isFollowing() ?? false
           if (!shouldFollowOutput) {
             setHasUnreadTerminalOutput(true)
           }
@@ -966,13 +970,15 @@ function App() {
 
           if (message.status === 'connecting' || message.status === 'disconnected') {
             setMudState({})
+            setHelpModal(null)
+            lastHelpResponseIdRef.current = null
             setChatOutput('')
             pendingStarWarsChatSpeakerRef.current = ''
           }
 
           if (message.status === 'connected') {
             triggerBufferRef.current = ''
-            terminalShouldFollowOutputRef.current = true
+            terminalScrollRef.current?.jumpToBottom()
             setHasUnreadTerminalOutput(false)
             setTerminalOutput('Connected. Waiting for room text and MSDP updates...')
           } else {
@@ -982,6 +988,11 @@ function App() {
           return
         }
 
+        const helpResponse = parseHelpInfo(message.state.helpInfo)
+        if (helpResponse && helpResponse.id !== lastHelpResponseIdRef.current) {
+          lastHelpResponseIdRef.current = helpResponse.id
+          setHelpModal(helpResponse)
+        }
         setMudState((current) => ({ ...current, ...message.state }))
       })
     }
@@ -999,13 +1010,24 @@ function App() {
   }, [dispatchInputText])
 
   useLayoutEffect(() => {
-    if (!terminalShouldFollowOutputRef.current) {
-      return
+    const viewport = terminalRef.current
+    const content = terminalContentRef.current
+    if (!viewport || !content) return
+    const controller = createTerminalScrollController(viewport, content, {
+      autoScrollEnabled: () => clientSettingsRef.current.terminal.autoScroll,
+      onBottom: () => setHasUnreadTerminalOutput(false),
+    })
+    terminalScrollRef.current = controller
+    return () => {
+      controller.destroy()
+      terminalScrollRef.current = null
     }
+  }, [])
 
-    scrollTerminalElementToBottom(terminalRef.current)
-    setHasUnreadTerminalOutput(false)
-  }, [terminalOutput])
+  // Reconcile after every commit, including command echo and layout settings.
+  useLayoutEffect(() => {
+    terminalScrollRef.current?.followOutput()
+  })
 
   useLayoutEffect(() => {
     scrollTerminalElementToBottom(chatRef.current)
@@ -2054,15 +2076,6 @@ function App() {
     }
   }
 
-  function handleTerminalScroll() {
-    const isAtBottom = isTerminalScrolledToBottom(terminalRef.current)
-    terminalShouldFollowOutputRef.current = isAtBottom
-
-    if (isAtBottom) {
-      setHasUnreadTerminalOutput(false)
-    }
-  }
-
   function handleTerminalClick(event: ReactMouseEvent<HTMLDivElement>) {
     if (!connected || event.button !== 0 || hasExpandedSelection()) {
       return
@@ -2072,8 +2085,7 @@ function App() {
   }
 
   function handleUnreadTerminalOutputClick() {
-    terminalShouldFollowOutputRef.current = true
-    scrollTerminalElementToBottom(terminalRef.current)
+    terminalScrollRef.current?.jumpToBottom()
     setHasUnreadTerminalOutput(false)
     focusCommandInput(commandInputRef.current)
   }
@@ -3388,6 +3400,10 @@ function App() {
         </div>
       ) : null}
 
+      {selectedMudPreset?.features?.helpModal && helpModal ? (
+        <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} />
+      ) : null}
+
       <main
         className={`layout${isMinimalistMode ? ' layout-minimalist' : ''}${isChatPaneColumn ? ' layout-chat-pane-column' : ''}`}
         style={layoutStyle}
@@ -3399,10 +3415,10 @@ function App() {
               className="terminal-output"
               data-prevent-command-focus
               onClick={handleTerminalClick}
-              onScroll={handleTerminalScroll}
               style={terminalOutputStyle}
-              dangerouslySetInnerHTML={{ __html: terminalOutputHtml }}
-            />
+            >
+              <div ref={terminalContentRef} className="terminal-output-content" dangerouslySetInnerHTML={{ __html: terminalOutputHtml }} />
+            </div>
 
             {hasUnreadTerminalOutput ? (
               <button
@@ -3681,7 +3697,7 @@ function App() {
 
                   {resolvedActiveSidebarTab === 'quests' ? (
                     mudState.questInfo ? (
-                      <QuestInfoPanel value={mudState.questInfo} />
+                      <QuestInfoPanel key={selectedMudId} value={mudState.questInfo} detailsEnabled={selectedMudPreset?.features?.questDetails === true} />
                     ) : (
                       <EmptyTabMessage message="No quest data reported yet." />
                     )
@@ -4596,14 +4612,6 @@ function getPossibleStarWarsChatSpeaker(text: string) {
   return /^[A-Za-z][A-Za-z0-9'_-]{1,31}$/.test(plainText) ? lastLine : ''
 }
 
-function isTerminalScrolledToBottom(terminal: HTMLElement | null) {
-  if (!terminal) {
-    return true
-  }
-
-  return terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight <= TERMINAL_BOTTOM_SCROLL_TOLERANCE
-}
-
 function scrollTerminalElementToBottom(terminal: HTMLElement | null) {
   if (!terminal) {
     return
@@ -5494,11 +5502,111 @@ function GroupResourceView({ resource }: { resource: GroupResource }) {
 
 type QuestInfoPanelProps = {
   value: MudValue
+  detailsEnabled: boolean
 }
 
-function QuestInfoPanel({ value }: QuestInfoPanelProps) {
+function QuestInfoPanel({ value, detailsEnabled }: QuestInfoPanelProps) {
+  const [selectedId, setSelectedId] = useState<string | null>(null)
   const normalizedValue = normalizeQuestValue(value)
-  return <div className="tab-inline-output quest-html-output">{renderQuestNode(normalizedValue)}</div>
+  const selectedQuest = detailsEnabled
+    ? parseQuestEntries(normalizedValue).find((quest) => quest.id === selectedId)
+    : undefined
+  // A completed/abandoned quest must not leave stale details open or reopen later.
+  if (selectedId !== null && !selectedQuest) setSelectedId(null)
+  return (
+    <div className="tab-inline-output quest-html-output">
+      {renderQuestNode(normalizedValue, detailsEnabled ? (quest) => setSelectedId(quest.id) : undefined)}
+      {selectedQuest ? <QuestDetailsModal quest={selectedQuest} onClose={() => setSelectedId(null)} /> : null}
+    </div>
+  )
+}
+
+function WebOutputModal({ title, titleId, closeLabel, className = '', onClose, children }: {
+  title: ReactNode; titleId: string; closeLabel: string; className?: string; onClose: () => void; children: ReactNode
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null)
+  useEffect(() => {
+    const dialog = dialogRef.current
+    if (dialog && !dialog.open) dialog.showModal()
+    return () => { dialog?.close() }
+  }, [])
+
+  return (
+    <dialog
+      ref={dialogRef}
+      className={`panel quest-details-modal ${className}`}
+      aria-labelledby={titleId}
+      onClose={(event) => {
+        // Strict Mode closes/reopens the same element. Its queued cleanup close
+        // event must not dismiss a dialog that has already reopened.
+        if (!event.currentTarget.open) onClose()
+      }}
+      onCancel={(event) => { event.preventDefault(); onClose() }}
+      onClick={(event) => { if (event.target === event.currentTarget) {
+        const bounds = event.currentTarget.getBoundingClientRect()
+        if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) onClose()
+      } }}
+    >
+      <header className="quest-details-header">
+        <h2 id={titleId}>{title}</h2>
+        <button type="button" onClick={onClose} aria-label={closeLabel} autoFocus>Close</button>
+      </header>
+      {children}
+    </dialog>
+  )
+}
+
+function QuestDetailsModal({ quest, onClose }: { quest: QuestEntry; onClose: () => void }) {
+  return (
+    <WebOutputModal title={<span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name ?? 'Quest details') }} />}
+      titleId="quest-details-title" closeLabel="Close quest details" onClose={onClose}>
+      {quest.description ? <p className="quest-details-description" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.description) }} /> : null}
+      <dl className="quest-details-facts">
+        {quest.type ? <><dt>Quest type</dt><dd dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.type) }} /></> : null}
+        {quest.progress ? <><dt>Progress</dt><dd>{quest.progress.label}{quest.progress.percentage === 100 ? ' — Objectives complete' : ''}</dd></> : null}
+        {quest.targets ? <><dt>Targets</dt><dd dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.targets) }} /></> : null}
+        {quest.timeRemaining !== undefined && quest.timeRemaining > 0 ? <><dt>Time remaining</dt><dd>{quest.timeRemaining} {quest.timeRemaining === 1 ? 'turn' : 'turns'}</dd></> : null}
+      </dl>
+      <section aria-labelledby="quest-journal-title">
+        <h3 id="quest-journal-title">Quest journal</h3>
+        {quest.info ? <div className="quest-details-journal" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.info) }} /> : <p className="quest-empty">No additional quest details were reported by the server.</p>}
+      </section>
+      {quest.dialogueCommands ? <p>Dialogue commands: <strong>{quest.dialogueCommands}</strong></p> : null}
+    </WebOutputModal>
+  )
+}
+
+type HelpInfo = { id: string; topic: string; body: string; truncated: boolean }
+
+function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
+  if (value === undefined) return null
+  const parsed = normalizeQuestValue(value)
+  if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.body !== 'string') return null
+  return { id: parsed.id, topic: typeof parsed.topic === 'string' ? parsed.topic.trim() : '', body: parsed.body, truncated: parsed.truncated === true }
+}
+
+function formatWebHelpBlocks(body: string): { text: string; preformatted: boolean }[] {
+  const clean = body.replace(/\t<\/?send\b[^>]*>/gi, '').replace(/\r\n?/g, '\n')
+  const lines = clean.split('\n').filter((line) => !/^[-=_+~]{5,}$/.test(line.replace(ANSI_ESCAPE_PATTERN, '').replace(/(?:@[A-Za-z]|\t.)/g, '').trim()))
+  return lines.join('\n').trim().split(/\n[ \t]*\n/).filter(Boolean).map((text) => {
+    const plain = text.replace(ANSI_ESCAPE_PATTERN, '').replace(/(?:@[A-Za-z]|\t.)/g, '')
+    const preformatted = /(^|\n) {2,}\S|\S {2,}\S|(^|\n)[-*] /m.test(plain)
+    return { text: preformatted ? text : text.replace(/\n/g, ' '), preformatted }
+  })
+}
+
+function HelpInfoModal({ help, onClose }: { help: HelpInfo; onClose: () => void }) {
+  return (
+    <WebOutputModal title={help.topic ? `Help: ${help.topic}` : 'Help'} titleId="help-details-title"
+      closeLabel="Close help" className="help-details-modal" onClose={onClose}>
+      <article className="help-details-body">
+        {formatWebHelpBlocks(help.body).map((block, index) => block.preformatted
+          ? <pre key={index} dangerouslySetInnerHTML={{ __html: renderMudHtml(block.text) }} />
+          : <p key={index} dangerouslySetInnerHTML={{ __html: renderMudHtml(block.text) }} />)}
+      </article>
+      {help.truncated ? <p className="quest-empty">This help response exceeded the display limit and was shortened.</p> : null}
+    </WebOutputModal>
+  )
 }
 
 function MudValuePanel({ value, emptyMessage }: MudValuePanelProps) {
@@ -6092,7 +6200,7 @@ function formatUnknownAffectFields(record: Record<string, MudValue>) {
   return entries.length > 0 ? entries.join(' | ') : undefined
 }
 
-function renderQuestNode(value: MudValue): ReactNode {
+function renderQuestNode(value: MudValue, onSelect?: (quest: QuestEntry) => void): ReactNode {
   if (value === null || value === undefined) {
     return <span className="quest-empty">No quest data reported yet.</span>
   }
@@ -6103,7 +6211,9 @@ function renderQuestNode(value: MudValue): ReactNode {
       <div className="quest-compact-list">
         {compactQuests.map((quest, index) => (
           <div className="quest-compact-item" key={`${quest.name ?? 'quest'}-${index}`}>
-            {quest.name ? <div className="quest-compact-name" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} /> : null}
+            {quest.name ? (onSelect ? (
+              <button type="button" className="quest-compact-name quest-name-button" onClick={() => onSelect(quest)} aria-haspopup="dialog" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
+            ) : <div className="quest-compact-name" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />) : null}
             {quest.type ? (
               <div className="quest-compact-type">
                 <span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.type) }} />
@@ -6152,7 +6262,7 @@ function renderQuestNode(value: MudValue): ReactNode {
     return (
       <ul className="quest-list">
         {value.map((item, index) => (
-          <li key={index}>{renderQuestNode(item)}</li>
+          <li key={index}>{renderQuestNode(item, onSelect)}</li>
         ))}
       </ul>
     )
@@ -6178,7 +6288,7 @@ function renderQuestNode(value: MudValue): ReactNode {
           return (
             <div key={key} className="quest-row">
               <span className="quest-key">{label}</span>
-              <span className="quest-value">{renderQuestNode(entryValue)}</span>
+              <span className="quest-value">{renderQuestNode(entryValue, onSelect)}</span>
             </div>
           )
         }
@@ -6186,7 +6296,7 @@ function renderQuestNode(value: MudValue): ReactNode {
         return (
           <div key={key} className="quest-block">
             <div className="quest-block-title">{label}</div>
-            <div>{renderQuestNode(entryValue)}</div>
+            <div>{renderQuestNode(entryValue, onSelect)}</div>
           </div>
         )
       })}
@@ -6195,6 +6305,11 @@ function renderQuestNode(value: MudValue): ReactNode {
 }
 
 type QuestEntry = {
+  id: string
+  description?: string
+  info?: string
+  timeRemaining?: number
+  dialogueCommands?: string
   name?: string
   type?: string
   progress?: QuestProgress
@@ -6209,7 +6324,7 @@ type QuestProgress = {
 function parseQuestEntries(value: MudValue): QuestEntry[] {
   const source = Array.isArray(value) ? value : isMudRecord(value) ? [value] : []
 
-  return source.flatMap((entry) => {
+  return source.flatMap((entry, index) => {
     if (!isMudRecord(entry)) {
       return []
     }
@@ -6225,6 +6340,11 @@ function parseQuestEntries(value: MudValue): QuestEntry[] {
 
     return [
       {
+        id: `${readAnyKey(entry, ['vnum', 'VNUM']) ?? name ?? index}:${readAnyKey(entry, ['slot', 'SLOT']) ?? index}`,
+        description: asOptionalText(readAnyKey(entry, ['description', 'DESCRIPTION'])),
+        info: asOptionalText(readAnyKey(entry, ['info', 'INFO'])),
+        timeRemaining: Number(readAnyKey(entry, ['time_remaining', 'TIME_REMAINING'])) || undefined,
+        dialogueCommands: formatQuestTargets(readAnyKey(entry, ['dialogue_commands', 'DIALOGUE_COMMANDS'])),
         name,
         type,
         progress,
@@ -6239,8 +6359,8 @@ function formatQuestProgress(value: MudValue | undefined): QuestProgress | undef
     return undefined
   }
 
-  const completed = asOptionalText(readAnyKey(value, ['completed', 'COMPLETED']))
-  const required = asOptionalText(readAnyKey(value, ['required', 'REQUIRED']))
+  const completed = String(readAnyKey(value, ['completed', 'COMPLETED']) ?? '')
+  const required = String(readAnyKey(value, ['required', 'REQUIRED']) ?? '')
   if (!completed || !required) {
     return undefined
   }
@@ -7281,7 +7401,7 @@ function shouldPreservePointerFocus(target: EventTarget | null) {
 
   return Boolean(
     target.closest(
-      'input, textarea, select, button, label, a, summary, [data-prevent-command-focus], [contenteditable="true"]',
+      'dialog, input, textarea, select, button, label, a, summary, [data-prevent-command-focus], [contenteditable="true"]',
     ),
   )
 }
@@ -7295,7 +7415,7 @@ function shouldIgnoreKeyBindingTarget(target: EventTarget | null, commandInput: 
     return false
   }
 
-  return Boolean(target.closest('input, textarea, select, button, [contenteditable="true"]'))
+  return Boolean(target.closest('dialog, input, textarea, select, button, [contenteditable="true"]'))
 }
 
 function hasExpandedSelection() {
@@ -7309,7 +7429,7 @@ function hasExpandedSelection() {
 
 function focusCommandInput(input: HTMLInputElement | null) {
   requestAnimationFrame(() => {
-    input?.focus({ preventScroll: true })
+    if (!document.querySelector('dialog[open]')) input?.focus({ preventScroll: true })
   })
 }
 
