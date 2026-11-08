@@ -73,6 +73,7 @@ type AutoLoginState = {
   accountName: string
   accountPassword: string
   characterName: string
+  createCharacter?: boolean
   stage: 'awaiting-account-name' | 'awaiting-account-response' | 'awaiting-character' | 'finishing-login'
   output: string
   continueCount: number
@@ -174,6 +175,11 @@ wss.on('connection', (socket) => {
     }
 
     if (message.type === 'heartbeat') {
+      return
+    }
+
+    if (message.type === 'create-character') {
+      session.startCharacterCreation(message.accountName, message.accountPassword)
       return
     }
 
@@ -396,6 +402,20 @@ class MudSession {
     }
   }
 
+  startCharacterCreation(accountName: string, accountPassword: string) {
+    if (!this.isKrynnConnection) {
+      this.sendStatus('error', 'Web character creation is available only for Krynn.')
+      return
+    }
+    if (/\r|\n/.test(accountPassword)) {
+      this.sendStatus('error', 'Invalid account credentials.')
+      return
+    }
+    this.msdpVariables = { ...this.msdpVariables, characterCreation: 'CHARACTER_CREATION' }
+    this.startAutoLogin(accountName, accountPassword, 'NewCharacter')
+    if (this.autoLogin) this.autoLogin.createCharacter = true
+  }
+
   sendStatus(status: ConnectionStatus, detail: string) {
     this.send({ type: 'connection-status', status, detail })
   }
@@ -578,8 +598,9 @@ class MudSession {
 
     login.output = stripMudLoginFormatting(`${login.output}${text}`).slice(-16384)
 
-    if (/wrong password|invalid account name|does not exist|disconnecting/i.test(login.output)) {
+    if (/wrong password|incorrect password|invalid account name|does not exist|disconnecting/i.test(login.output)) {
       this.autoLogin = null
+      if (login.createCharacter) this.sendStatus('error', 'Account sign-in failed. Check your account name and password.')
       return
     }
 
@@ -610,6 +631,20 @@ class MudSession {
     }
 
     if (login.stage === 'awaiting-character') {
+      if (login.createCharacter) {
+        if (isKrynnAccountMenu(login.output)) {
+          // Subscribe before C, and let the game's input cycle process REPORT
+          // before creation starts. Manual takeover cancels this pending action.
+          login.stage = 'finishing-login'
+          this.sendMsdpPair('REPORT', 'CHARACTER_CREATION')
+          setTimeout(() => {
+            if (this.autoLogin !== login || !this.mudSocket || this.mudSocket.destroyed) return
+            this.sendAutoLoginInput('c')
+            this.autoLogin = null
+          }, 150)
+        }
+        return
+      }
       const slot = findAccountCharacterSlot(login.output, login.characterName)
       if (slot) {
         this.sendAutoLoginInput(slot)
@@ -620,6 +655,7 @@ class MudSession {
     }
 
     if (login.stage === 'finishing-login' && this.isKrynnConnection) {
+      if (login.createCharacter) return
       // Reconnecting skips the character menu. Never send a menu choice into play.
       if (/\breconnecting(?: to unswitched char)?\./i.test(login.output)) {
         this.autoLogin = null
@@ -981,6 +1017,13 @@ function isAccountNamePrompt(output: string) {
     || /(?:account\s+)?name\s*:\s*$/im.test(output)
 }
 
+function isKrynnAccountMenu(output: string) {
+  // The game's colored shortcut is rendered as "(C)reate", not "create".
+  // Accept both that spelling and menus that repeat the C after the shortcut.
+  return /(?:\(\s*c\s*\)\s*c?reate|\bcreate)\s+a\s+new\s+character/i.test(output)
+    && /your\s+choice\s*:/i.test(output)
+}
+
 function isKrynnCharacterMenu(output: string) {
   return /chronicles\s+of\s+krynn\s+character\s+menu/i.test(output)
     && /^\s*1\)\s*enter\s+the\s+game\./im.test(output)
@@ -1051,6 +1094,10 @@ function parseClientMessage(data: RawData): ClientMessage | null {
         accountPassword: message.accountPassword,
         characterName: message.characterName,
       }
+    }
+
+    if (message.type === 'create-character' && typeof message.accountName === 'string' && typeof message.accountPassword === 'string') {
+      return { type: 'create-character', accountName: message.accountName, accountPassword: message.accountPassword }
     }
 
     if (message.type === 'msdp-config') {
@@ -1245,7 +1292,7 @@ function normalizeScalar(value: string): MudValue {
 function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean, helpModalsEnabled = false) {
   const variables = new Set(
     Object.entries(msdpVariables)
-      .filter(([key]) => !['helpInfo', 'loreInfo', 'questComplete', 'questAccepted', 'roomQuests', 'roomContents'].includes(key) || helpModalsEnabled)
+      .filter(([key]) => !['helpInfo', 'loreInfo', 'questComplete', 'questAccepted', 'roomQuests', 'roomContents', 'characterCreation'].includes(key) || helpModalsEnabled)
       .filter(([key]) => starWarsMode || !starWarsMsdpVariableKeys.includes(key as (typeof starWarsMsdpVariableKeys)[number]))
       .map(([, value]) => value.trim())
       .filter(Boolean),
@@ -1403,6 +1450,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'group':
       partial.group = value
+      break
+    case 'characterCreation':
+      partial.characterCreation = value
       break
     case 'roomContents':
       partial.roomContents = value

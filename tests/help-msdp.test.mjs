@@ -11,7 +11,7 @@ function extract(name) {
 }
 const context = vm.createContext({ starWarsMsdpVariableKeys: [], REQUIRED_MSDP_VARIABLES: [] })
 vm.runInContext(ts.transpile(['getConfiguredMsdpVariables', 'resolveMsdpVariableKey', 'mapMsdpUpdate'].map(extract).join('\n')), context)
-const variables = { roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
+const variables = { characterCreation: 'CHARACTER_CREATION', roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
 
 test('help MSDP reports require explicit per-MUD enablement', () => {
   assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('HELP_INFO'), false)
@@ -66,4 +66,12 @@ test('Krynn room contents reports are subscribed and mapped intact', () => {
   assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('ROOM_CONTENTS'), true)
   const payload = JSON.stringify({ room: 1005, entries: [{ target: '}o100', kind: 'object', name: 'a sword', takeable: true }] })
   assert.equal(context.mapMsdpUpdate('ROOM_CONTENTS', payload, variables).roomContents, payload)
+})
+
+
+test('character creation is Krynn opt-in and preserves account-filtered choices', () => {
+  assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('CHARACTER_CREATION'), false)
+  assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('CHARACTER_CREATION'), true)
+  const payload = JSON.stringify({ id: 'create-1', active: true, step: 'race', choices: [{ value: 'human', label: 'Human' }] })
+  assert.equal(context.mapMsdpUpdate('CHARACTER_CREATION', payload, variables).characterCreation, payload)
 })

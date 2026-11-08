@@ -11,18 +11,20 @@ const sessionSource = source.slice(source.indexOf('class MudSession'), source.in
 const helpers = source.slice(source.indexOf('function isValidAutoLoginValue'), source.indexOf('function parseClientMessage'))
 function fixture(host = 'krynn.d20mud.com') {
   const sockets = []
+  const timers = []
   const context = vm.createContext({
     WebSocket: { OPEN: 1 },
     appSettings: { connection: { muds: [{ host: 'krynn.d20mud.com', features: { helpModal: true } }] } },
     defaultMsdpVariables: {},
     normalizeMsdpVariableMap: (value) => value,
     isValidHost: () => true,
+    isMovementCommandInput: () => false,
     MUD_TCP_KEEPALIVE_INITIAL_DELAY_MS: 30_000,
     ANSI_ESCAPE_PATTERN: /\x1b\[[0-?]*[ -/]*[@-~]/g,
     IAC: 255, SB: 250, SE: 240, TELOPT_MSDP: 69, MSDP_VAR: 1, MSDP_VAL: 2,
     WEB_CLIENT_NAME: 'LuminariWebClient', WEB_CLIENT_VERSION: 'test', Buffer,
     getConfiguredMsdpVariables: (values) => Object.values(values),
-    setTimeout: () => 1, clearTimeout() {},
+    setTimeout: (callback, delay) => { timers.push({ callback, delay }); return timers.length }, clearTimeout() {},
     TelnetParser: class { constructor(_socket, callbacks) { this.callbacks = callbacks } },
     net: { createConnection() {
       const socket = new EventEmitter()
@@ -40,7 +42,7 @@ function fixture(host = 'krynn.d20mud.com') {
   const messages = []
   const session = new context.Session({ readyState: 1, send: (message) => messages.push(JSON.parse(message)) })
   session.connect(host, 4300, {}, false)
-  return { session, sockets, messages }
+  return { session, sockets, messages, timers }
 }
 
 test('Krynn prompt and split output advance through saved character login', () => {
@@ -158,4 +160,68 @@ test('Krynn copyover renegotiation restores quest REPORT and SEND subscriptions'
   session.parser.callbacks.onMsdpReady()
   assert.equal(packets().filter((value) => value.includes('REPORT\x02QUEST_INFO')).length, 2)
   assert.equal(packets().filter((value) => value.includes('SEND\x02QUEST_INFO')).length, 2)
+})
+
+test('Krynn create flow signs into an account and selects C only at its menu', () => {
+  const { session, sockets, timers } = fixture()
+  session.startCharacterCreation('ExistingAccount', 'test-password')
+  session.processAutoLoginText('What is your account name, adventurer?')
+  session.processAutoLoginText('Password: ')
+  session.processAutoLoginText('Account characters\r\n(C)create a new character | (A)add a character | (Q)quit\r\nYour cho')
+  assert.deepEqual(sockets[0].writes, ['ExistingAccount\n', 'test-password\n'])
+  session.processAutoLoginText('ice : ')
+  assert.equal(sockets[0].writes.at(-1).includes(Buffer.from('CHARACTER_CREATION')), true)
+  timers.find((timer) => timer.delay === 150).callback()
+  assert.deepEqual(sockets[0].writes.filter((write) => typeof write === 'string'), ['ExistingAccount\n', 'test-password\n', 'c\n'])
+  assert.equal(session.autoLogin, null)
+  session.processAutoLoginText('Did I get that right, Newname (Y/N)?')
+  assert.equal(sockets[0].writes.filter((write) => typeof write === 'string').length, 3)
+})
+
+test('creation never confirms a nonexistent account or operates on another MUD', () => {
+  const { session, sockets } = fixture()
+  session.startCharacterCreation('MissingAccount', 'test-password')
+  session.processAutoLoginText('What is your account name, adventurer?')
+  session.processAutoLoginText('Did I get that right, MissingAccount (Y/N)? ')
+  assert.deepEqual(sockets[0].writes, ['MissingAccount\n', 'N\n'])
+  assert.equal(session.autoLogin, null)
+  const other = fixture('faerun.d20mud.com')
+  other.session.startCharacterCreation('ExistingAccount', 'test-password')
+  assert.equal(other.session.autoLogin, null)
+  assert.match(other.messages.at(-1).detail, /only for Krynn/)
+})
+
+
+test('actual colored Krynn account menu starts creation when received byte by byte', () => {
+  const { session, sockets, timers } = fixture()
+  session.startCharacterCreation('ExistingAccount', 'test-password')
+  session.processAutoLoginText('What is your account name, adventurer?')
+  session.processAutoLoginText('Password: ')
+  // Match the real show_account_menu output: the shortcut supplies the C/A/Q.
+  const menu = '\tC--------------------------------\tn\r\n'
+    + '  # | Name | Lvl | Race | Class\r\n  2 | Someone | 10 | Human | War\r\n'
+    + '\tcType the # of a character listed above or choose one of the following:\r\n'
+    + ' \tn(\tCC\tn)\tcreate a new character \tC| \tn(\tCA\tn)\tcdd a character \tC| \tn(\tCQ\tn)\tcuit\tn\r\n'
+    + '\tcYour choice :\tn '
+  for (const character of menu) session.processAutoLoginText(character)
+  assert.equal(timers.filter((timer) => timer.delay === 150).length, 1)
+  assert.equal(sockets[0].writes.at(-1).includes(Buffer.from('CHARACTER_CREATION')), true)
+  timers.find((timer) => timer.delay === 150).callback()
+  assert.deepEqual(sockets[0].writes.filter((write) => typeof write === 'string'), ['ExistingAccount\n', 'test-password\n', 'c\n'])
+  assert.equal(session.autoLogin, null)
+})
+
+test('account-menu handoff requires the prompt and cancels after manual takeover', () => {
+  const { session, sockets, timers } = fixture()
+  session.startCharacterCreation('ExistingAccount', 'test-password')
+  session.processAutoLoginText('What is your account name, adventurer?')
+  session.processAutoLoginText('Password: ')
+  session.processAutoLoginText('(C)reate a new character')
+  assert.equal(timers.filter((timer) => timer.delay === 150).length, 0)
+  session.processAutoLoginText('\nYour choice : ')
+  const timer = timers.find((timer) => timer.delay === 150)
+  assert.ok(timer)
+  session.sendInput('q')
+  timer.callback()
+  assert.deepEqual(sockets[0].writes.filter((write) => typeof write === 'string'), ['ExistingAccount\n', 'test-password\n', 'q\n'])
 })

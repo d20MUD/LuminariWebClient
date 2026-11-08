@@ -136,12 +136,12 @@ test('help modal accepts structured JSON and formats prose, colors and tables sa
   assert.equal(context.parseHelpInfo(''), null)
   assert.equal(context.parseHelpInfo({ id: '1', body: 4 }), null)
   const help = context.parseHelpInfo(JSON.stringify({ id: '1', topic: 'ranged', body: '----------\nThis is wrapped\nprose.\n\nName  Damage\nBow   1d8\n\n<script>bad()</script>\n\n\tRRed text\tn', truncated: true }))
-  const blocks = context.formatWebHelpBlocks(help.body)
-  assert.equal(blocks[0].text, 'This is wrapped prose.')
-  assert.equal(blocks[1].preformatted, true)
+  const text = context.reflowModalText(help.body)
+  assert.match(text, /^This is wrapped prose\.\n\nName  Damage Bow   1d8\n\n/)
   const html = renderToStaticMarkup(React.createElement(context.HelpInfoModal, { help, onClose() {} }))
   assert.match(html, /Help: ranged/)
-  assert.match(html, /<pre>/)
+  assert.match(html, /class="modal-flow-text"/)
+  assert.doesNotMatch(html, /<pre>/)
   assert.match(html, /&lt;script&gt;/)
   assert.doesNotMatch(html, /<script>|----------/)
   assert.match(html, /was shortened/)
@@ -230,7 +230,8 @@ test('lore results use a labeled modal with safe colors, prose and stat tables',
   assert.match(html, /Lore: sword &lt;script&gt;/)
   assert.match(html, /lore-details-title/)
   assert.match(html, /Close lore/)
-  assert.match(html, /<pre/)
+  assert.match(html, /class="modal-flow-text"/)
+  assert.doesNotMatch(html, /<pre/)
   assert.match(html, /Damage/)
   assert.match(html, /This lore response exceeded/)
   assert.doesNotMatch(html, /<script>|<img/)
@@ -274,11 +275,88 @@ test('acceptance and completion decode leading color tokens before trimming and 
         : context.QuestCompletionModal({ completion: { id: '1', name: 'Trouble at the Docks', body, rewards: {} }, onClose() {} })
       const html = renderToStaticMarkup(element)
       assert.match(html, /<span style="color:#00ffff">First paragraph\./i)
-      assert.match(html, /<span style="color:#00ffff">Second paragraph\./i)
+      assert.match(html, /First paragraph\.\n\nSecond paragraph\./i)
       assert.doesNotMatch(html, /<p>C|\\tC|<script>/)
-      assert.match(html, /<p>Plain paragraph\. &lt;script&gt;/)
+      assert.match(html, /Plain paragraph\. &lt;script&gt;/)
     }
   }
   const standalone = renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderWebTextBlocks('Uncolored next result.')))
   assert.doesNotMatch(standalone, /color:/)
+})
+
+
+test('modal prose reflows source lines while preserving every blank line and colors', () => {
+  const input = '\tC  First line\r\n  continues here.\r\n\r\n\r\nSecond paragraph\ncontinues.\tn\n \nLast paragraph.'
+  const text = context.reflowModalText(input)
+  assert.match(text, /First line continues here\.\n\n\nSecond paragraph continues\./)
+  assert.match(text, /\n\nLast paragraph\.$/)
+  const html = renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderWebTextBlocks(input)))
+  assert.match(html, /modal-flow-text/)
+  assert.match(html, /color:#00ffff/i)
+  assert.match(html, /First line continues here\.\n\n\nSecond paragraph continues\./)
+  assert.doesNotMatch(html, /<pre|\\tC/)
+  assert.equal(context.reflowModalText('\n\nLeading\nwrapped\n\n'), '\n\nLeading wrapped\n\n')
+})
+
+test('quest journal details use the same flowing paragraph renderer', () => {
+  const quest = context.parseQuestEntries([{ vnum: 100, name: 'Quest', description: 'A summary\nwrapped by the server.', info: 'Journal line\ncontinues.\n\nNew paragraph.' }])[0]
+  const html = renderToStaticMarkup(context.QuestDetailsModal({ quest, onClose() {} }))
+  assert.match(html, /A summary wrapped by the server\./)
+  assert.match(html, /Journal line continues\.\n\nNew paragraph\./)
+  assert.doesNotMatch(html, /<pre/)
+})
+
+test('creation prompts decode tab colors and link controls in actual and escaped forms', () => {
+  for (const tab of ['\t', String.raw`\t`]) {
+    const html = renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderWebTextBlocks(
+      `Did I get that right, Stanky (${tab}(Y${tab})/${tab}(N${tab}))?\n\n${tab}RRed${tab}n ${tab}[F055]Cyan${tab}n`,
+    )))
+    assert.match(html, /Stanky \(Y\/N\)\?/)
+    assert.match(html, /color:#ff0000/i)
+    assert.match(html, /color:#00ffff/i)
+    assert.doesNotMatch(html, /\t|\\t/)
+  }
+  assert.equal(context.convertLuminariColorCodes('\t\t'), '\t')
+  assert.equal(context.convertLuminariColorCodes('\t[x1.0]\t<send href="yes">Yes\t</send>'), 'Yes')
+  assert.equal(context.convertLuminariColorCodes('\t[u9731/snow]'), '☃')
+})
+
+test('creator ability lists keep individual entries while reflowing their continuations', () => {
+  const input = '\tWRacial Abilities:\tn\n\nSeafaring:          - +2 to swim checks.\nMinotaur Toughness: - +2 to intimidation\nchecks.\nTough Hide:         - +1 to armor class (natural ac bonus).\nInfravision:        - limited vision when without light.'
+  const text = context.reflowModalText(input)
+  assert.match(text, /swim checks\.\nMinotaur Toughness:/)
+  assert.match(text, /intimidation checks\.\nTough Hide:/)
+  assert.match(text, /bonus\)\.\nInfravision:/)
+  assert.match(text, /Abilities:.*\n\nSeafaring:/)
+  assert.equal(context.reflowModalText('Class features:\n- First benefit\n  continues here.\n- Second benefit\n\nNext paragraph\nwraps here.'),
+    'Class features:\n- First benefit continues here.\n- Second benefit\n\nNext paragraph wraps here.')
+  assert.equal(context.reflowModalText('Choices:\n1. First\n2. Second\n• Third'), 'Choices:\n1. First\n2. Second\n• Third')
+})
+
+test('class help preserves statistics, abilities and proficiencies on separate lines', () => {
+  const input = '>Class Abilities:\n\nBardic Knowledge\nPerform\nArcane Casting (Compose)\n\n>Alignment: Any\n>Hit Dice: 3-6 Per Level\n>Skill Points: Int Modifier x 4 at 1st level,\n8 + Int Modifier each additional level\n>Proficiencies:\nAdvanced Weapon Proficiency\nLight Armor Proficiency\n\nSee also: CLASSES'
+  const text = context.reflowModalText(input)
+  assert.match(text, /Bardic Knowledge\nPerform\nArcane Casting/)
+  assert.match(text, />Alignment: Any\n>Hit Dice: 3-6 Per Level\n>Skill Points:/)
+  assert.match(text, /1st level, 8 \+ Int Modifier each additional level\n>Proficiencies:\nAdvanced Weapon Proficiency\nLight Armor Proficiency/)
+})
+
+test('racial ability descriptions remove column padding and join wrapped text', () => {
+  const input = '\tC>Racial Abilities:\tn\n\nUltravision:           - Can see in the dark.\nCowardly:              - Can flee regardless                          of movement speed\n                          and no move action needed to flee.\nGrubby:                - Resists poison,\n                          disease and water damage.\n\n>Other Info:\nKeep   spacing here.'
+  const text = context.reflowModalText(input)
+  assert.match(text, /Ultravision: - Can see in the dark\.\nCowardly: - Can flee regardless of movement speed and no move action needed to flee\.\nGrubby: - Resists poison, disease and water damage\./)
+  assert.match(text, /\n\n>Other Info:\nKeep   spacing here\./)
+  const html = renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderWebTextBlocks(input)))
+  assert.match(html, /color:#00ffff/i)
+  assert.doesNotMatch(html, /Cowardly: {2}|regardless {2}/)
+})
+
+test('race and class info preserve whitespace and decorative lines while parsing colors safely', () => {
+  const body = '\tC>Racial Abilities:\tn\n\nAbility:         - First line\n                   continuation\n--------------------\n<script> & text'
+  const html = renderToStaticMarkup(context.renderCreationInfo(body))
+  assert.match(html, /<pre class="creation-info-text">/)
+  assert.match(html, /color:#00ffff/i)
+  assert.match(html, /Ability:         - First line\n                   continuation\n--------------------/)
+  assert.match(html, /&lt;script&gt; &amp; text/)
+  assert.doesNotMatch(html, /<script>|modal-flow-text/)
 })

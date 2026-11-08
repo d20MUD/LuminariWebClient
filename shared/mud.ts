@@ -94,6 +94,7 @@ export interface MudState {
   affects?: MudValue
   cooldowns?: MudValue
   group?: MudValue
+  characterCreation?: MudValue
   roomContents?: MudValue
   roomQuests?: MudValue
   questAccepted?: MudValue
@@ -161,6 +162,7 @@ export const defaultMsdpVariables = {
   affects: 'AFFECTS',
   cooldowns: 'COOLDOWNS',
   group: 'GROUP',
+  characterCreation: 'CHARACTER_CREATION',
   roomContents: 'ROOM_CONTENTS',
   roomQuests: 'ROOM_QUESTS',
   questAccepted: 'QUEST_ACCEPTED',
@@ -285,6 +287,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     affects: normalizeMsdpVariableValue(raw.affects, defaultMsdpVariables.affects),
     cooldowns: normalizeMsdpVariableValue(raw.cooldowns, defaultMsdpVariables.cooldowns),
     group: normalizeMsdpVariableValue(raw.group, defaultMsdpVariables.group),
+    characterCreation: normalizeMsdpVariableValue(raw.characterCreation, defaultMsdpVariables.characterCreation),
     roomContents: normalizeMsdpVariableValue(raw.roomContents, defaultMsdpVariables.roomContents),
     roomQuests: normalizeMsdpVariableValue(raw.roomQuests, defaultMsdpVariables.roomQuests),
     questAccepted: normalizeMsdpVariableValue(raw.questAccepted, defaultMsdpVariables.questAccepted),
@@ -334,6 +337,7 @@ function normalizeMsdpVariableValue(value: unknown, fallback: string) {
 }
 
 export type ClientMessage =
+  | { type: 'create-character'; accountName: string; accountPassword: string }
   | {
       type: 'connect'
       host: string

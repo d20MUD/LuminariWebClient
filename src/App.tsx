@@ -23,6 +23,9 @@ import type {
 } from '../shared/mud.ts'
 import { createTerminalScrollController } from './terminal-scroll.ts'
 import type { TerminalScrollController } from './terminal-scroll.ts'
+import { CharacterCreationPanel } from './CharacterCreation.tsx'
+import { parseCreationStep } from './character-creation.ts'
+import type { CreationStep } from './character-creation.ts'
 import './App.css'
 
 const appSettings = getAppSettings(import.meta.env.DEV)
@@ -42,6 +45,8 @@ const COMMAND_HISTORY_LIMIT = 100
 const AUTOMATION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 const AUTOMATION_COOKIE_CHUNK_SIZE = 3000
 const AUTOMATION_RECURSION_LIMIT = 10
+// Keep the unfinished creation UI available in code, but hide its entry point.
+const ENABLE_UI_CHARACTER_CREATION = false
 const CLIENT_CONFIG_EXPORT_VERSION = 1
 const WEBSOCKET_RECONNECT_INITIAL_DELAY_MS = 1000
 const WEBSOCKET_RECONNECT_MAX_DELAY_MS = 30_000
@@ -711,6 +716,16 @@ function App() {
   const [clientSettings, setClientSettings] = useState<ClientSettings>(initialClientSettings)
   const [autoLoginProfiles, setAutoLoginProfiles] = useState<AutoLoginProfile[]>(() => loadAutoLoginProfiles())
   const [isAutoLoginDialogOpen, setIsAutoLoginDialogOpen] = useState(false)
+  const [isCreateAccountFormOpen, setIsCreateAccountFormOpen] = useState(false)
+  const [creationAccount, setCreationAccount] = useState('')
+  const [creationPassword, setCreationPassword] = useState('')
+  const [saveCreationLogin, setSaveCreationLogin] = useState(false)
+  const [creationStep, setCreationStep] = useState<CreationStep | null>(null)
+  const [isCreationOpen, setIsCreationOpen] = useState(false)
+  const creationStepRef = useRef<CreationStep | null>(null)
+  const creationOpenRef = useRef(false)
+  const creationConnectPendingRef = useRef(false)
+  const creationLoginRef = useRef<{ accountName: string; accountPassword: string; save: boolean } | null>(null)
   const [isAutoLoginEditorOpen, setIsAutoLoginEditorOpen] = useState(false)
   const [editingAutoLoginProfile, setEditingAutoLoginProfile] = useState<AutoLoginProfile | null>(null)
   const [automationNotice, setAutomationNotice] = useState<AutomationNotice | null>(null)
@@ -1022,6 +1037,14 @@ function App() {
 
           if (message.status === 'connecting' || message.status === 'disconnected') {
             setMudState({})
+            setCreationStep(null)
+            creationStepRef.current = null
+            if (message.status === 'connecting') creationConnectPendingRef.current = false
+            if (message.status === 'disconnected' && !creationConnectPendingRef.current) {
+              setIsCreationOpen(false)
+              creationOpenRef.current = false
+              creationLoginRef.current = null
+            }
             setQuestNotifications([])
             lastQuestCompletionIdRef.current = null
             lastQuestAcceptanceIdRef.current = null
@@ -1045,6 +1068,28 @@ function App() {
           return
         }
 
+        const creation = parseCreationStep(message.state.characterCreation)
+        if (creation && creation.id !== creationStepRef.current?.id) {
+          const first = creationStepRef.current === null
+          creationStepRef.current = creation
+          if (creation.active) {
+            setCreationStep(creation)
+            if (creationLoginRef.current && !creationLoginRef.current.save) creationLoginRef.current = null
+            if (first) { setIsCreationOpen(true); creationOpenRef.current = true }
+            if (!creationOpenRef.current && creation.body) appendWindowOutput(creation.body)
+          } else {
+            setCreationStep(null)
+            setIsCreationOpen(false)
+            creationOpenRef.current = false
+            if (creation.body) appendWindowOutput(creation.body)
+            const login = creationLoginRef.current
+            if (login?.save && creation.name && creation.state === 0) {
+              setAutoLoginProfiles((current) => [...current.filter((profile) => !(profile.mudId === 'krynn' && profile.characterName.toLowerCase() === creation.name.toLowerCase())),
+                { id: createAutomationId('login'), mudId: 'krynn', accountName: login.accountName, accountPassword: login.accountPassword, characterName: creation.name, autoLogin: true }])
+            }
+            creationLoginRef.current = null
+          }
+        }
         const acceptance = parseQuestAcceptance(message.state.questAccepted)
         if (acceptance && acceptance.id !== lastQuestAcceptanceIdRef.current) {
           lastQuestAcceptanceIdRef.current = acceptance.id
@@ -1541,6 +1586,29 @@ function App() {
         characterName: profile.characterName,
       })
     }
+  }
+
+  function beginCharacterCreation() {
+    const profile = selectedMudAutoLoginProfiles[0]
+    setCreationAccount(profile?.accountName ?? '')
+    setCreationPassword(profile?.accountPassword ?? '')
+    setSaveCreationLogin(false)
+    setIsCreateAccountFormOpen(true)
+  }
+
+  function connectForCharacterCreation() {
+    const accountName = creationAccount.trim()
+    if (!accountName || !creationPassword || /[\r\n]/.test(accountName + creationPassword)) return
+    creationConnectPendingRef.current = true
+    creationLoginRef.current = { accountName, accountPassword: creationPassword, save: saveCreationLogin }
+    creationStepRef.current = null
+    setCreationStep(null)
+    startMudConnection()
+    setIsCreateAccountFormOpen(false)
+    setIsCreationOpen(true)
+    creationOpenRef.current = true
+    sendMessage({ type: 'create-character', accountName, accountPassword: creationPassword })
+    setCreationPassword('')
   }
 
   function beginAutoLoginProfileEdit(profile?: AutoLoginProfile) {
@@ -2189,6 +2257,7 @@ function App() {
     <div className={`app-shell${isMinimalistMode ? ' app-shell-minimalist' : ''}`}>
       <div ref={menuBarRef} className="window-menu-bar panel" data-prevent-command-focus>
         <div className="window-menu-links" role="menubar" aria-label="Window menu">
+          {selectedMudId === 'krynn' && creationStep ? <button type="button" className="window-menu-link" onClick={() => { setIsCreationOpen(true); creationOpenRef.current = true }}>Character creation</button> : null}
           {connected && !isMinimalistMode ? (
             <button type="button" className="window-menu-link" onClick={() => setIsHeaderVisible((current) => !current)}>
               {isHeaderVisible ? 'Hide Header' : 'Show Header'}
@@ -3413,7 +3482,16 @@ function App() {
               </button>
             </div>
 
-            {isAutoLoginEditorOpen && editingAutoLoginProfile ? (
+            {isCreateAccountFormOpen ? (
+              <form className="auto-login-editor" onSubmit={(event) => { event.preventDefault(); connectForCharacterCreation() }}>
+                <h3>Create a new Krynn character</h3>
+                <p>Sign in to an existing account. Its unlocked races and classes will be available during creation.</p>
+                <label><span>Account name</span><input required autoComplete="username" value={creationAccount} onChange={(event) => setCreationAccount(event.target.value)} /></label>
+                <label><span>Account password</span><input required type="password" autoComplete="current-password" value={creationPassword} onChange={(event) => setCreationPassword(event.target.value)} /></label>
+                <label className="automation-toggle"><input type="checkbox" checked={saveCreationLogin} onChange={(event) => setSaveCreationLogin(event.target.checked)} /><span>Save this character’s login on this device</span></label>
+                <div className="auto-login-actions"><button type="button" onClick={() => { setIsCreateAccountFormOpen(false); setCreationPassword('') }}>Cancel</button><button type="submit">Choose character name</button></div>
+              </form>
+            ) : isAutoLoginEditorOpen && editingAutoLoginProfile ? (
               <form
                 className="auto-login-editor"
                 onSubmit={(event) => {
@@ -3489,20 +3567,28 @@ function App() {
                           <span>{profile.accountName} · {profile.autoLogin ? 'Auto-login enabled' : 'Manual after connect'}</span>
                         </button>
                         <button type="button" aria-label={`Edit ${profile.characterName}`} onClick={() => beginAutoLoginProfileEdit(profile)}>Edit</button>
-                        <button type="button" aria-label={`Delete ${profile.characterName}`} onClick={() => deleteAutoLoginProfile(profile.id)}>Delete</button>
+                        <button type="button" aria-label={`Remove saved login for ${profile.characterName}`} title="Remove this saved login from your browser" onClick={() => deleteAutoLoginProfile(profile.id)}>Remove login</button>
                       </div>
                     ))
                   )}
                 </div>
                 <div className="auto-login-actions">
-                  <button type="button" onClick={() => beginAutoLoginProfileEdit()}>Add character</button>
-                  <button type="button" onClick={() => startMudConnection()}>Skip — log in manually</button>
+                  {ENABLE_UI_CHARACTER_CREATION && selectedMudId === 'krynn' ? <button type="button" onClick={beginCharacterCreation}>Create new character</button> : null}
+                  <button type="button" onClick={() => beginAutoLoginProfileEdit()}>Add saved login</button>
+                  <button type="button" onClick={() => startMudConnection()}>Log in manually</button>
                 </div>
               </>
             )}
           </section>
         </div>
       ) : null}
+
+      {selectedMudId === 'krynn' && isCreationOpen ? <WebOutputModal title="Create your Krynn character" titleId="character-creation-title" closeLabel="Minimize character creation"
+        className={`character-creation-modal${creationStep?.step === 'race' || creationStep?.step === 'class' ? ' character-creation-modal-grid' : ''}`} onClose={() => { setIsCreationOpen(false); creationOpenRef.current = false }}>
+        {creationStep ? <CharacterCreationPanel key={creationStep.id} creation={creationStep} onRespond={sendInputLine} renderText={renderWebTextBlocks} renderInfo={renderCreationInfo} />
+          : <div className="creation-waiting"><p role="status">{status === 'error' ? statusDetail : 'Signing in to your account…'}</p><p>The name step will appear once the account is authenticated.</p>
+            <button type="button" onClick={() => { creationConnectPendingRef.current = false; sendMessage({ type: 'disconnect' }); setIsCreationOpen(false); creationOpenRef.current = false; setIsAutoLoginDialogOpen(true) }}>Back to saved characters</button></div>}
+      </WebOutputModal> : null}
 
       {selectedMudId === 'krynn' && questNotifications[0] ? (
         questNotifications[0].kind === 'accepted'
@@ -5683,16 +5769,16 @@ function QuestDetailsModal({ quest, onClose }: { quest: QuestEntry; onClose: () 
   return (
     <WebOutputModal title={<span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name ?? 'Quest details') }} />}
       titleId="quest-details-title" closeLabel="Close quest details" onClose={onClose}>
-      {quest.description ? <p className="quest-details-description" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.description) }} /> : null}
+      {quest.description ? <div className="quest-details-description">{renderWebTextBlocks(quest.description)}</div> : null}
       <dl className="quest-details-facts">
-        {quest.type ? <><dt>Quest type</dt><dd dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.type) }} /></> : null}
+        {quest.type ? <><dt>Quest type</dt><dd>{renderWebTextBlocks(quest.type)}</dd></> : null}
         {quest.progress ? <><dt>Progress</dt><dd>{quest.progress.label}{quest.progress.percentage === 100 ? ' — Objectives complete' : ''}</dd></> : null}
-        {quest.targets ? <><dt>Targets</dt><dd dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.targets) }} /></> : null}
+        {quest.targets ? <><dt>Targets</dt><dd>{renderWebTextBlocks(quest.targets)}</dd></> : null}
         {quest.timeRemaining !== undefined && quest.timeRemaining > 0 ? <><dt>Time remaining</dt><dd>{quest.timeRemaining} {quest.timeRemaining === 1 ? 'turn' : 'turns'}</dd></> : null}
       </dl>
       <section aria-labelledby="quest-journal-title">
         <h3 id="quest-journal-title">Quest journal</h3>
-        {quest.info ? <div className="quest-details-journal" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.info) }} /> : <p className="quest-empty">No additional quest details were reported by the server.</p>}
+        {quest.info ? <div className="quest-details-journal">{renderWebTextBlocks(quest.info)}</div> : <p className="quest-empty">No additional quest details were reported by the server.</p>}
       </section>
       {quest.dialogueCommands ? <p>Dialogue commands: <strong>{quest.dialogueCommands}</strong></p> : null}
     </WebOutputModal>
@@ -5785,7 +5871,7 @@ function RoomQuestNotice({ value, currentRoom, connected, onJoin, modalEnabled =
           {available.quests.map((quest) => <section className="room-quest-card" key={quest.id}>
             <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
             <p className="room-quest-giver">Offered by <span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.giver) }} /></p>
-            {quest.description ? <p dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.description) }} /> : null}
+            {quest.description ? <div>{renderWebTextBlocks(quest.description)}</div> : null}
             <p className="room-quest-giver">{quest.minLevel !== undefined && quest.maxLevel !== undefined ? `Levels ${quest.minLevel}–${quest.maxLevel} · ` : ''}{quest.time !== undefined && quest.time > 0 ? `Time limit: ${quest.time} turns` : 'No time limit'}</p>
             <button type="button" onClick={() => { onJoin(`quest webjoin ${available.room} ${quest.id}`); setOpenedRoom(null) }}>Join quest</button>
           </section>)}
@@ -5878,23 +5964,44 @@ function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
   return { id: parsed.id, topic: typeof parsed.topic === 'string' ? parsed.topic.trim() : '', body: parsed.body, truncated: parsed.truncated === true }
 }
 
-function formatWebHelpBlocks(body: string): { text: string; preformatted: boolean }[] {
-  // Decode before trimming: a leading tab is part of a Krynn color token.
+function reflowModalText(body: string): string {
+  // Decode color tokens before trimming any indentation or whitespace.
   const clean = convertLuminariColorCodes(body.replace(/\t<\/?send\b[^>]*>/gi, '')).replace(/\r\n?/g, '\n')
-  const lines = clean.split('\n').filter((line) => !/^[-=_+~]{5,}$/.test(line.replace(ANSI_ESCAPE_PATTERN, '').replace(/(?:@[A-Za-z]|\t.)/g, '').trim()))
-  return lines.join('\n').trim().split(/\n[ \t]*\n/).filter(Boolean).map((text) => {
-    const plain = text.replace(ANSI_ESCAPE_PATTERN, '').replace(/(?:@[A-Za-z]|\t.)/g, '')
-    const preformatted = /(^|\n) {2,}\S|\S {2,}\S|(^|\n)[-*] /m.test(plain)
-    return { text: preformatted ? text : text.replace(/\n/g, ' '), preformatted }
-  })
+  const lines = clean.split('\n').filter((line) => !/^[-=_+~]{5,}$/.test(line.replace(ANSI_ESCAPE_PATTERN, '').trim()))
+  const plainLine = (line: string) => line.replace(ANSI_ESCAPE_PATTERN, '').trim()
+  const isBlank = (line: string) => plainLine(line).length === 0
+  // Keep list items separate, including the creator's "Ability: - bonus"
+  // format. Wrapped continuation lines still flow with their own item.
+  const startsListItem = (line: string) => /^(?:[-*•]\s+|\d+[.)]\s+|[^:]+:\s*-\s+)/.test(plainLine(line))
+  const isHeading = (line: string) => /:\s*$/.test(plainLine(line))
+  let abilityList = false
+  let racialAbilities = false
+  return lines.map((line, index) => {
+    const plain = plainLine(line)
+    if (/^>/.test(plain) || isHeading(line)) {
+      abilityList = /^>?\s*(?:Class Abilities|Proficiencies)\s*:/i.test(plain)
+      racialAbilities = /^>?\s*Racial Abilities\s*:/i.test(plain)
+    } else if (/^(?:See also|Do you want|Would you like)\b/i.test(plain)) {
+      abilityList = false
+      racialAbilities = false
+    }
+    // Keep blank lines (including color resets on them) and only reflow the
+    // source's single line breaks inside a paragraph.
+    const trimmed = line.replace(/^[ \t]+|[ \t]+$/g, '')
+    const text = racialAbilities ? trimmed.replace(/[ \t]+/g, ' ') : trimmed
+    if (index === lines.length - 1) return text
+    return text + (!isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
+  }).join('')
+}
+
+function renderCreationInfo(body: string): ReactNode {
+  return <pre className="creation-info-text" dangerouslySetInnerHTML={{ __html: renderMudHtml(body) }} />
 }
 
 function renderWebTextBlocks(body: string): ReactNode[] {
-  // Keep ANSI state across paragraphs, while giving each result its own renderer.
-  const renderer = new AnsiToHtml({ escapeXML: true, stream: true })
-  return formatWebHelpBlocks(body).map((block, index) => block.preformatted
-    ? <pre key={index} dangerouslySetInnerHTML={{ __html: renderer.toHtml(block.text) }} />
-    : <p key={index} dangerouslySetInnerHTML={{ __html: renderer.toHtml(block.text) }} />)
+  // One renderer preserves color state across every paragraph in this result.
+  const renderer = new AnsiToHtml({ escapeXML: true })
+  return [<span key="text" className="modal-flow-text" dangerouslySetInnerHTML={{ __html: renderer.toHtml(reflowModalText(body)) }} />]
 }
 
 function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' }) {
@@ -7649,15 +7756,44 @@ function convertLuminariColorCodes(value: string) {
     }
 
     if (next === current) {
-      converted += LUMINARI_COLOR_CHAR
+      converted += current
       index += 1
       continue
+    }
+
+    // Krynn's tab-prefixed link markers decorate the enclosed text in a
+    // terminal. Web dialogs keep that text and discard the protocol markup.
+    if (current === KRYNN_COLOR_CHAR && (next === '(' || next === ')')) {
+      index += 1
+      continue
+    }
+    if (current === KRYNN_COLOR_CHAR && next === '<') {
+      const endIndex = normalized.indexOf('>', index + 2)
+      if (endIndex !== -1) {
+        index = endIndex
+        continue
+      }
     }
 
     if (next === '[') {
       const endIndex = normalized.indexOf(']', index + 2)
       if (endIndex > index + 2) {
         const luminariRgb = normalized.slice(index + 2, endIndex)
+        if (current === KRYNN_COLOR_CHAR) {
+          const unicode = /^u(\d+)(?:\/.*)?$/i.exec(luminariRgb)
+          if (unicode) {
+            const codePoint = Number(unicode[1])
+            if (codePoint <= 0x10ffff && !(codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+              converted += String.fromCodePoint(codePoint)
+            }
+            index = endIndex
+            continue
+          }
+          if (/^x/i.test(luminariRgb)) {
+            index = endIndex
+            continue
+          }
+        }
         const ansiColor = luminariRgbToAnsi(luminariRgb)
         if (ansiColor) {
           converted += ansiColor
