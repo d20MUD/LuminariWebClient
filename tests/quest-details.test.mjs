@@ -13,7 +13,7 @@ const ast = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true,
 // Use the real parsing/rendering functions without mounting the application or a socket.
 const functions = ast.statements.filter(ts.isFunctionDeclaration).map((node) => node.getText(ast).replace('export default ', '')).filter((text) => !text.includes('import.meta')).join('\n')
 const colors = ast.statements.filter(ts.isVariableStatement).filter((node) => node.declarationList.declarations.some((d) => ['LUMINARI_COLOR_CHAR', 'KRYNN_COLOR_CHAR', 'LUMINARI_COLOR_CODES'].includes(d.name.getText(ast)))).map((n) => n.getText(ast)).join('\n')
-const context = vm.createContext({ ANSI_ESCAPE_PATTERN: /\x1b\[[0-?]*[ -/]*[@-~]/g, React, AnsiToHtml, useEffect: React.useEffect, useRef: React.useRef })
+const context = vm.createContext({ ANSI_ESCAPE_PATTERN: /\x1b\[[0-?]*[ -/]*[@-~]/g, React, Fragment: React.Fragment, AnsiToHtml, useEffect: React.useEffect, useRef: React.useRef })
 vm.runInContext(ts.transpile(`${colors}\n${functions}`, { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React }), context)
 const fixture = [{ slot: 0, vnum: 70001, name: '\tWDefend Palanthas\tn', type: 'Kill Mob', description: 'Help the militia.', info: 'Hold the gates.\n\n<script>alert("bad")</script>\n\tRFor Palanthas!\tn', progress: { completed: 2, required: 5, remaining: 3 }, targets: [{ name: 'a knight' }], time_remaining: 7, dialogue_commands: ['convince'] }]
 
@@ -154,4 +154,131 @@ test('help modal feature is enabled only for Krynn', () => {
   for (const preset of settings.exports.appSettings.connection.muds) {
     assert.equal(preset.features?.helpModal === true, preset.id === 'krynn')
   }
+})
+
+
+test('completion events validate payloads and render safe web rewards', () => {
+  assert.equal(context.parseQuestCompletion(undefined), null)
+  assert.equal(context.parseQuestCompletion('{}'), null)
+  const completion = context.parseQuestCompletion(JSON.stringify({
+    id: 'completion-1', name: 'A finished quest', body: 'Thank you!\n\n<script>unsafe</script>',
+    rewards: { 'Quest points': 5, 'Gold coins': 2500, Item: '<img src=x onerror=bad>', invalid: {} },
+  }))
+  assert.equal(completion.rewards['Gold coins'], 2500)
+  assert.equal(completion.rewards.invalid, undefined)
+  const html = renderToStaticMarkup(context.QuestCompletionModal({ completion, onClose() {} }))
+  assert.match(html, /Quest complete!/)
+  assert.match(html, /Rewards received/)
+  assert.match(html, /2,500/)
+  assert.doesNotMatch(html, /<script>|<img/)
+  assert.match(html, /&lt;script&gt;/)
+})
+
+
+test('room quests reject malformed entries and expose a clickable room notification', () => {
+  assert.equal(context.parseRoomQuests(undefined), null)
+  assert.equal(context.parseRoomQuests('{broken'), null)
+  assert.equal(context.parseRoomQuests({ room: '1005', quests: [] }), null)
+  const value = JSON.stringify({ room: 1005, quests: [
+    { id: 100, name: '<script>Quest</script>', description: 'Help the guard', giver: 'Guard', info: 'First paragraph.\n\nSecond paragraph.', minLevel: 5, maxLevel: 20, time: 30 },
+    { id: '100;quit', name: 'Invalid' },
+  ] })
+  assert.equal(context.parseRoomQuests(value).quests.length, 1)
+  let opened = null
+  context.useState = () => [opened, (value) => { opened = value }]
+  const props = { value, currentRoom: 1005, connected: true, onJoin() {} }
+  const notice = context.RoomQuestNotice(props)
+  const html = renderToStaticMarkup(notice)
+  assert.match(html, /Quests available here/)
+  assert.match(html, /1 quest you can join/)
+  assert.match(html, /View quests/)
+  notice.props.children[1].props.onClick()
+  assert.equal(opened, 1005)
+  const modalTree = context.RoomQuestNotice(props).props.children[2]
+  const modalHtml = renderToStaticMarkup(modalTree)
+  assert.match(modalHtml, /Join quest/)
+  assert.match(modalHtml, /Levels 5–20/)
+  assert.match(modalHtml, /Time limit: 30 turns/)
+  assert.doesNotMatch(modalHtml, /<script>/)
+  assert.equal(context.RoomQuestNotice({ ...props, currentRoom: 1006 }), null)
+  assert.equal(opened, null)
+  assert.equal(context.RoomQuestNotice({ ...props, connected: false }), null)
+  assert.equal(context.RoomQuestNotice({ ...props, value: { room: 1005, quests: [] } }), null)
+})
+
+test('joining from the room modal sends the selected quest ID and room token', () => {
+  const commands = []
+  let opened = 1005
+  context.useState = () => [opened, (value) => { opened = value }]
+  const notice = context.RoomQuestNotice({
+    value: { room: 1005, quests: [{ id: 900, name: 'Quest', giver: 'Giver' }] }, currentRoom: 1005, connected: true,
+    onJoin: (command) => commands.push(command),
+  })
+  const modal = notice.props.children[2]
+  const card = modal.props.children[1].props.children[0]
+  const join = card.props.children.at(-1)
+  join.props.onClick()
+  assert.deepEqual(commands, ['quest webjoin 1005 900'])
+  assert.equal(opened, null)
+})
+
+
+test('lore results use a labeled modal with safe colors, prose and stat tables', () => {
+  const help = context.parseHelpInfo(JSON.stringify({ id: 'lore-1', topic: 'sword <script>',
+    body: '\tWName: Sword\tn\nLevel: 5\n\nDamage    1d8\nWeight    3\n\n<img src=x onerror=bad>', truncated: true }))
+  const html = renderToStaticMarkup(context.HelpInfoModal({ help, kind: 'Lore', onClose() {} }))
+  assert.match(html, /Lore: sword &lt;script&gt;/)
+  assert.match(html, /lore-details-title/)
+  assert.match(html, /Close lore/)
+  assert.match(html, /<pre/)
+  assert.match(html, /Damage/)
+  assert.match(html, /This lore response exceeded/)
+  assert.doesNotMatch(html, /<script>|<img/)
+})
+
+
+test('quest acceptance validates and renders the actual journal and dialogue commands', () => {
+  assert.equal(context.parseQuestAcceptance(undefined), null)
+  assert.equal(context.parseQuestAcceptance('{}'), null)
+  const acceptance = context.parseQuestAcceptance(JSON.stringify({ id: 'accept-1', name: '\tWThe guard\tn',
+    body: 'Speak to the guard.\n\n<script>unsafe</script>', time: 20, commands: ['convince', 'beguile', 3] }))
+  assert.equal(acceptance.commands.length, 2)
+  const html = renderToStaticMarkup(context.QuestAcceptanceModal({ acceptance, onClose() {} }))
+  assert.match(html, /Quest accepted!/)
+  assert.match(html, /Speak to the guard/)
+  assert.match(html, /Time limit: 20 turns/)
+  assert.match(html, /convince, beguile/)
+  assert.doesNotMatch(html, /<script>/)
+})
+
+test('available quests hide acceptance instructions until after joining', () => {
+  context.useState = () => [1005, () => {}]
+  const available = { room: 1005, quests: [{ id: 900, name: 'Trouble at the Docks', giver: 'a mysterious old lady',
+    description: 'Trouble at the Docks', info: '\tCSecret acceptance instructions about the dockmaster.' }] }
+  const notice = context.RoomQuestNotice({ value: available, currentRoom: 1005, connected: true, onJoin() {} })
+  const html = renderToStaticMarkup(notice.props.children[2])
+  assert.match(html, /Trouble at the Docks/)
+  assert.match(html, /Join quest/)
+  assert.doesNotMatch(html, /Secret acceptance instructions|dockmaster/)
+  const terminal = context.formatAvailableQuestsOutput(context.parseRoomQuests(available))
+  assert.doesNotMatch(terminal, /Secret acceptance instructions|dockmaster/)
+  assert.match(terminal, /quest webjoin 1005 900/)
+})
+
+test('acceptance and completion decode leading color tokens before trimming and keep paragraph colors', () => {
+  for (const token of ['\tC', String.raw`\tC`, '^[F055]']) {
+    const body = `${token}First paragraph.\n\nSecond paragraph.\tn\n\nPlain paragraph. <script>unsafe</script>`
+    for (const kind of ['accepted', 'complete']) {
+      const element = kind === 'accepted'
+        ? context.QuestAcceptanceModal({ acceptance: { id: '1', name: 'Trouble at the Docks', body, commands: [] }, onClose() {} })
+        : context.QuestCompletionModal({ completion: { id: '1', name: 'Trouble at the Docks', body, rewards: {} }, onClose() {} })
+      const html = renderToStaticMarkup(element)
+      assert.match(html, /<span style="color:#00ffff">First paragraph\./i)
+      assert.match(html, /<span style="color:#00ffff">Second paragraph\./i)
+      assert.doesNotMatch(html, /<p>C|\\tC|<script>/)
+      assert.match(html, /<p>Plain paragraph\. &lt;script&gt;/)
+    }
+  }
+  const standalone = renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderWebTextBlocks('Uncolored next result.')))
+  assert.doesNotMatch(standalone, /color:/)
 })

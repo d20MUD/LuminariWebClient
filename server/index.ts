@@ -1245,7 +1245,7 @@ function normalizeScalar(value: string): MudValue {
 function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean, helpModalsEnabled = false) {
   const variables = new Set(
     Object.entries(msdpVariables)
-      .filter(([key]) => key !== 'helpInfo' || helpModalsEnabled)
+      .filter(([key]) => !['helpInfo', 'loreInfo', 'questComplete', 'questAccepted', 'roomQuests', 'roomContents'].includes(key) || helpModalsEnabled)
       .filter(([key]) => starWarsMode || !starWarsMsdpVariableKeys.includes(key as (typeof starWarsMsdpVariableKeys)[number]))
       .map(([, value]) => value.trim())
       .filter(Boolean),
@@ -1403,6 +1403,21 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'group':
       partial.group = value
+      break
+    case 'roomContents':
+      partial.roomContents = value
+      break
+    case 'roomQuests':
+      partial.roomQuests = value
+      break
+    case 'questAccepted':
+      partial.questAccepted = value
+      break
+    case 'questComplete':
+      partial.questComplete = value
+      break
+    case 'loreInfo':
+      partial.loreInfo = value
       break
     case 'helpInfo':
       partial.helpInfo = value

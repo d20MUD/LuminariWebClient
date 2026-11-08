@@ -1,5 +1,5 @@
 import AnsiToHtml from 'ansi-to-html'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, ChangeEvent, FormEvent, KeyboardEvent as ReactKeyboardEvent, MouseEvent as ReactMouseEvent } from 'react'
 import type { ReactNode } from 'react'
 import { getAppSettings } from '../shared/app-settings.ts'
@@ -148,7 +148,7 @@ type BarConfig = {
   widthValue: string
 }
 
-type SidebarTabId = 'character' | 'gear' | 'quests' | 'group' | 'affects'
+type SidebarTabId = 'roomContents' | 'character' | 'gear' | 'quests' | 'group' | 'affects'
 
 type MapPanelTabId = 'graphic' | 'graphicLegend' | 'ascii' | 'asciiLegend'
 
@@ -246,7 +246,43 @@ type AutoLoginProfile = {
   autoLogin: boolean
 }
 
+const OUTPUT_WINDOWS = [
+  { id: 'help', label: 'Help' },
+  { id: 'lore', label: 'Lore' },
+  { id: 'questAcceptance', label: 'Quest acceptance' },
+  { id: 'questCompletion', label: 'Quest completion' },
+  { id: 'availableQuests', label: 'Available quests' },
+  { id: 'questDetails', label: 'Quest details' },
+] as const
+
+type OutputWindowId = (typeof OUTPUT_WINDOWS)[number]['id']
+type WindowPreferences = Record<OutputWindowId, boolean>
+const DEFAULT_WINDOW_PREFERENCES: WindowPreferences = { help: true, lore: true, questAcceptance: true, questCompletion: true, availableQuests: true, questDetails: true }
+
+function OutputWindowsControls({ windows, onChange }: { windows: WindowPreferences; onChange: (updates: Partial<WindowPreferences>) => void }) {
+  return <>
+    <fieldset>
+      <legend>Pop-up windows</legend>
+      {OUTPUT_WINDOWS.map(({ id, label }) => <label key={id} className="output-window-option">
+        <input type="checkbox" checked={windows[id]} onChange={(event) => onChange({ [id]: event.target.checked })} />
+        {label}
+      </label>)}
+    </fieldset>
+    <div className="output-window-actions">
+      <button type="button" onClick={() => onChange(Object.fromEntries(OUTPUT_WINDOWS.map(({ id }) => [id, true])))}>All on</button>
+      <button type="button" onClick={() => onChange(Object.fromEntries(OUTPUT_WINDOWS.map(({ id }) => [id, false])))}>All off</button>
+    </div>
+    <p className="automation-menu-help">Unchecked windows show their content in the main output.</p>
+  </>
+}
+
+function normalizeWindowPreferences(value: unknown): WindowPreferences {
+  const record = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
+  return Object.fromEntries(OUTPUT_WINDOWS.map(({ id }) => [id, typeof record[id] === 'boolean' ? record[id] : true])) as WindowPreferences
+}
+
 type ClientSettings = {
+  windows: WindowPreferences
   connection: {
     defaultMudId: string
     customMudName: string
@@ -297,7 +333,7 @@ type AutomationNotice = {
   text: string
 }
 
-type AutomationMenuId = 'aliases' | 'triggers' | 'keyBindings' | 'msdpVars' | 'layout' | 'settings'
+type AutomationMenuId = 'windows' | 'aliases' | 'triggers' | 'keyBindings' | 'msdpVars' | 'layout' | 'settings'
 
 const DEFAULT_LAYOUT_MAP_PANELS: Record<MapPanelTabId, boolean> = {
   graphic: true,
@@ -307,6 +343,7 @@ const DEFAULT_LAYOUT_MAP_PANELS: Record<MapPanelTabId, boolean> = {
 }
 
 const DEFAULT_LAYOUT_SIDEBAR_TABS: Record<SidebarTabId, boolean> = {
+  roomContents: true,
   character: true,
   gear: true,
   quests: true,
@@ -377,6 +414,7 @@ const GAUGE_VISIBILITY_MODE_OPTIONS: Array<{ value: GaugeVisibilityMode; label: 
 ]
 
 const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
+  windows: DEFAULT_WINDOW_PREFERENCES,
   connection: {
     defaultMudId: findMatchingMudPresetId(appSettings.connection.muds, DEFAULT_HOST, DEFAULT_PORT) ?? CUSTOM_MUD_VALUE,
     customMudName: '',
@@ -529,6 +567,7 @@ const SIDEBAR_TABS: SidebarTab[] = [
   { id: 'character', label: 'Player info' },
   { id: 'gear', label: 'Gear' },
   { id: 'quests', label: 'Quests' },
+  { id: 'roomContents', label: 'Room contents' },
   { id: 'group', label: 'Group' },
   { id: 'affects', label: 'Affects' },
 ]
@@ -541,6 +580,7 @@ const LAYOUT_MAP_TOGGLE_OPTIONS: Array<{ id: MapPanelTabId; label: string }> = [
 ]
 
 const LAYOUT_SIDEBAR_TOGGLE_OPTIONS: Array<{ id: SidebarTabId; label: string }> = [
+  { id: 'roomContents', label: 'Room contents tab' },
   { id: 'character', label: 'Player info tab' },
   { id: 'gear', label: 'Gear tab' },
   { id: 'group', label: 'Group tab' },
@@ -643,6 +683,11 @@ function App() {
   const initialConnectionDefaults = resolveConnectionDefaults(appSettings, initialClientSettings, getUrlMudId())
   const [uiSettings, setUiSettings] = useState<AppSettings>(appSettings)
   const [mudState, setMudState] = useState<MudState>({})
+  const [questNotifications, setQuestNotifications] = useState<QuestNotification[]>([])
+  const lastQuestAcceptanceIdRef = useRef<string | null>(null)
+  const lastQuestCompletionIdRef = useRef<string | null>(null)
+  const [loreModals, setLoreModals] = useState<HelpInfo[]>([])
+  const lastLoreResponseIdRef = useRef<string | null>(null)
   const [helpModal, setHelpModal] = useState<HelpInfo | null>(null)
   const lastHelpResponseIdRef = useRef<string | null>(null)
   const [host, setHost] = useState(initialConnectionDefaults.host)
@@ -700,8 +745,8 @@ function App() {
   const pendingStarWarsChatSpeakerRef = useRef('')
   const visibleMapTabs = useMemo(() => getVisibleMapPanelTabs(clientSettings.layout), [clientSettings.layout])
   const visibleSidebarTabs = useMemo(
-    () => getVisibleSidebarTabs(clientSettings.layout, isStarWarsConnection),
-    [clientSettings.layout, isStarWarsConnection],
+    () => getVisibleSidebarTabs(clientSettings.layout, isStarWarsConnection, selectedMudId === 'krynn'),
+    [clientSettings.layout, isStarWarsConnection, selectedMudId],
   )
 
   useEffect(() => {
@@ -824,6 +869,13 @@ function App() {
     },
     [sendMessage],
   )
+
+  const appendWindowOutput = useCallback((text: string) => {
+    if (!terminalScrollRef.current?.isFollowing()) setHasUnreadTerminalOutput(true)
+    setTerminalOutput((current) => trimTerminalOutputLines(
+      `${current}\n${normalizeTerminalText(text)}\n`, terminalHistoryLineLimitRef.current,
+    ))
+  }, [])
 
   const rememberCommand = useCallback((text: string) => {
     if (!text.trim() || isMovementCommandInput(text)) {
@@ -970,6 +1022,11 @@ function App() {
 
           if (message.status === 'connecting' || message.status === 'disconnected') {
             setMudState({})
+            setQuestNotifications([])
+            lastQuestCompletionIdRef.current = null
+            lastQuestAcceptanceIdRef.current = null
+            setLoreModals([])
+            lastLoreResponseIdRef.current = null
             setHelpModal(null)
             lastHelpResponseIdRef.current = null
             setChatOutput('')
@@ -988,10 +1045,27 @@ function App() {
           return
         }
 
+        const acceptance = parseQuestAcceptance(message.state.questAccepted)
+        if (acceptance && acceptance.id !== lastQuestAcceptanceIdRef.current) {
+          lastQuestAcceptanceIdRef.current = acceptance.id
+          if (clientSettingsRef.current.windows.questAcceptance) setQuestNotifications((current) => [...current, { kind: 'accepted', quest: acceptance }])
+        }
+        const completion = parseQuestCompletion(message.state.questComplete)
+        if (completion && completion.id !== lastQuestCompletionIdRef.current) {
+          lastQuestCompletionIdRef.current = completion.id
+          if (clientSettingsRef.current.windows.questCompletion) setQuestNotifications((current) => [...current, { kind: 'complete', quest: completion }])
+        }
+        const loreResponse = parseHelpInfo(message.state.loreInfo)
+        if (loreResponse && loreResponse.id !== lastLoreResponseIdRef.current) {
+          lastLoreResponseIdRef.current = loreResponse.id
+          if (clientSettingsRef.current.windows.lore) setLoreModals((current) => [...current, loreResponse])
+          else appendWindowOutput(formatTextWindowOutput(loreResponse, 'Lore'))
+        }
         const helpResponse = parseHelpInfo(message.state.helpInfo)
         if (helpResponse && helpResponse.id !== lastHelpResponseIdRef.current) {
           lastHelpResponseIdRef.current = helpResponse.id
-          setHelpModal(helpResponse)
+          if (clientSettingsRef.current.windows.help) setHelpModal(helpResponse)
+          else appendWindowOutput(formatTextWindowOutput(helpResponse, 'Help'))
         }
         setMudState((current) => ({ ...current, ...message.state }))
       })
@@ -1007,7 +1081,7 @@ function App() {
       socketRef.current?.close()
       socketRef.current = null
     }
-  }, [dispatchInputText])
+  }, [appendWindowOutput, dispatchInputText])
 
   useLayoutEffect(() => {
     const viewport = terminalRef.current
@@ -1656,6 +1730,24 @@ function App() {
     setAutomationNotice(null)
   }
 
+  function updateWindowPreferences(updates: Partial<WindowPreferences>) {
+    const windows = { ...clientSettingsRef.current.windows, ...updates }
+    // Help/lore output is captured by the server; restore any pending content
+    // before hiding these windows. Quest events already retain terminal output.
+    if (!windows.help && helpModal) {
+      appendWindowOutput(formatTextWindowOutput(helpModal, 'Help'))
+      setHelpModal(null)
+    }
+    if (!windows.lore && loreModals.length) {
+      loreModals.forEach((lore) => appendWindowOutput(formatTextWindowOutput(lore, 'Lore')))
+      setLoreModals([])
+    }
+    setQuestNotifications((current) => current.filter((notice) => windows[notice.kind === 'accepted' ? 'questAcceptance' : 'questCompletion']))
+    const next = { ...clientSettingsRef.current, windows }
+    clientSettingsRef.current = next
+    setClientSettings(next)
+  }
+
   function toggleAutomationMenu(menuId: AutomationMenuId) {
     setOpenAutomationMenu((current) => (current === menuId ? null : menuId))
   }
@@ -1994,6 +2086,7 @@ function App() {
           asciiLegend: visible,
         },
         sidebarTabs: {
+          roomContents: visible,
           character: visible,
           gear: visible,
           quests: visible,
@@ -2052,6 +2145,8 @@ function App() {
 
     try {
       const importedConfig = parseClientConfigImport(await file.text(), clientSettings, aliases, triggers)
+      updateWindowPreferences(importedConfig.settings.windows)
+      clientSettingsRef.current = importedConfig.settings
       setClientSettings(importedConfig.settings)
       const connectionDefaults = resolveConnectionDefaults(uiSettings, importedConfig.settings)
       setHost(connectionDefaults.host)
@@ -2099,6 +2194,15 @@ function App() {
               {isHeaderVisible ? 'Hide Header' : 'Show Header'}
             </button>
           ) : null}
+
+          {selectedMudId === 'krynn' ? <div className="window-menu-item">
+            <button type="button" className={`window-menu-link${openAutomationMenu === 'windows' ? ' window-menu-link-open' : ''}`}
+              aria-expanded={openAutomationMenu === 'windows'} aria-controls="output-windows-menu"
+              onClick={() => toggleAutomationMenu('windows')}>Windows</button>
+            {openAutomationMenu === 'windows' ? <div id="output-windows-menu" className="window-menu-dropdown output-windows-menu">
+              <OutputWindowsControls windows={clientSettings.windows} onChange={updateWindowPreferences} />
+            </div> : null}
+          </div> : null}
 
           <div className="window-menu-item">
             <button
@@ -3400,7 +3504,19 @@ function App() {
         </div>
       ) : null}
 
-      {selectedMudPreset?.features?.helpModal && helpModal ? (
+      {selectedMudId === 'krynn' && questNotifications[0] ? (
+        questNotifications[0].kind === 'accepted'
+          ? <QuestAcceptanceModal key={`accepted:${questNotifications[0].quest.id}`} acceptance={questNotifications[0].quest}
+              onClose={() => setQuestNotifications((current) => current.slice(1))} />
+          : <QuestCompletionModal key={`complete:${questNotifications[0].quest.id}`} completion={questNotifications[0].quest}
+              onClose={() => setQuestNotifications((current) => current.slice(1))} />
+      ) : null}
+
+      {selectedMudId === 'krynn' && clientSettings.windows.lore && loreModals[0] ? (
+        <HelpInfoModal key={loreModals[0].id} kind="Lore" help={loreModals[0]} onClose={() => setLoreModals((current) => current.slice(1))} />
+      ) : null}
+
+      {selectedMudPreset?.features?.helpModal && clientSettings.windows.help && helpModal ? (
         <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} />
       ) : null}
 
@@ -3409,6 +3525,7 @@ function App() {
         style={layoutStyle}
       >
         <section className={`terminal-column panel${isChatPaneColumn ? ' layout-column-main' : ''}`}>
+          {selectedMudId === 'krynn' ? <RoomQuestNotice value={mudState.roomQuests} currentRoom={mudState.roomVnum} connected={connected} onJoin={sendInputLine} modalEnabled={clientSettings.windows.availableQuests} onOutput={appendWindowOutput} /> : null}
           <div className="terminal-output-shell">
             <div
               ref={terminalRef}
@@ -3693,11 +3810,13 @@ function App() {
                     </>
                   ) : null}
 
+                  {resolvedActiveSidebarTab === 'roomContents' && selectedMudId === 'krynn' ? <RoomContentsPanel value={mudState.roomContents} currentRoom={mudState.roomVnum} connected={connected} onAction={sendInputLine} /> : null}
+
                   {resolvedActiveSidebarTab === 'gear' ? <GearPanel value={mudState.gear} /> : null}
 
                   {resolvedActiveSidebarTab === 'quests' ? (
                     mudState.questInfo ? (
-                      <QuestInfoPanel key={selectedMudId} value={mudState.questInfo} detailsEnabled={selectedMudPreset?.features?.questDetails === true} />
+                      <QuestInfoPanel key={selectedMudId} value={mudState.questInfo} detailsEnabled={selectedMudPreset?.features?.questDetails === true} modalEnabled={clientSettings.windows.questDetails} onOutput={appendWindowOutput} />
                     ) : (
                       <EmptyTabMessage message="No quest data reported yet." />
                     )
@@ -4159,6 +4278,7 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
   const sidebarRecord = isObjectRecord(record.sidebar) ? record.sidebar : null
 
   return {
+    windows: normalizeWindowPreferences(record.windows),
     connection: {
       defaultMudId: normalizeDefaultMudId(readOptionalString(connectionRecord ?? {}, ['defaultMudId'])),
       customMudName: readOptionalString(connectionRecord ?? {}, ['customMudName'])?.trim() ?? '',
@@ -4236,6 +4356,7 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
             : DEFAULT_CLIENT_SETTINGS.layout.mapPanels.asciiLegend,
       },
       sidebarTabs: {
+        roomContents: typeof layoutSidebarTabsRecord?.roomContents === 'boolean' ? layoutSidebarTabsRecord.roomContents : true,
         character:
           typeof layoutSidebarTabsRecord?.character === 'boolean'
             ? layoutSidebarTabsRecord.character
@@ -4783,8 +4904,8 @@ function getCustomMudOptionLabel(settings: ClientSettings) {
   return name.length > 0 ? name : 'Custom'
 }
 
-function getVisibleSidebarTabs(layoutSettings: ClientSettings['layout'], isStarWarsConnection: boolean) {
-  return SIDEBAR_TABS.filter((tab) => (isStarWarsConnection || tab.id !== 'gear') && layoutSettings.sidebarTabs[tab.id])
+function getVisibleSidebarTabs(layoutSettings: ClientSettings['layout'], isStarWarsConnection: boolean, isKrynnConnection = false) {
+  return SIDEBAR_TABS.filter((tab) => (isStarWarsConnection || tab.id !== 'gear') && (isKrynnConnection || tab.id !== 'roomContents') && layoutSettings.sidebarTabs[tab.id])
 }
 
 function getDefaultSidebarTab(settings: ClientSettings, isStarWarsConnection: boolean): SidebarTabId {
@@ -5503,19 +5624,21 @@ function GroupResourceView({ resource }: { resource: GroupResource }) {
 type QuestInfoPanelProps = {
   value: MudValue
   detailsEnabled: boolean
+  modalEnabled?: boolean
+  onOutput?: (text: string) => void
 }
 
-function QuestInfoPanel({ value, detailsEnabled }: QuestInfoPanelProps) {
+function QuestInfoPanel({ value, detailsEnabled, modalEnabled = true, onOutput }: QuestInfoPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const normalizedValue = normalizeQuestValue(value)
-  const selectedQuest = detailsEnabled
+  const selectedQuest = detailsEnabled && modalEnabled
     ? parseQuestEntries(normalizedValue).find((quest) => quest.id === selectedId)
     : undefined
   // A completed/abandoned quest must not leave stale details open or reopen later.
   if (selectedId !== null && !selectedQuest) setSelectedId(null)
   return (
     <div className="tab-inline-output quest-html-output">
-      {renderQuestNode(normalizedValue, detailsEnabled ? (quest) => setSelectedId(quest.id) : undefined)}
+      {renderQuestNode(normalizedValue, detailsEnabled ? (quest) => { if (modalEnabled) setSelectedId(quest.id); else onOutput?.(formatQuestDetailsOutput(quest)) } : undefined, modalEnabled)}
       {selectedQuest ? <QuestDetailsModal quest={selectedQuest} onClose={() => setSelectedId(null)} /> : null}
     </div>
   )
@@ -5576,6 +5699,176 @@ function QuestDetailsModal({ quest, onClose }: { quest: QuestEntry; onClose: () 
   )
 }
 
+type RoomEntity = { target: string; name: string; kind: 'mob' | 'object' | 'player'; takeable: boolean }
+type RoomContents = { room: number; entries: RoomEntity[] }
+
+function parseRoomContents(value: MudValue | undefined): RoomContents | null {
+  if (value === undefined) return null
+  const parsed = normalizeQuestValue(value)
+  if (!isMudRecord(parsed) || typeof parsed.room !== 'number' || !Number.isSafeInteger(parsed.room) || !Array.isArray(parsed.entries)) return null
+  const entries = parsed.entries.flatMap((entry): RoomEntity[] => {
+    if (!isMudRecord(entry) || !['mob', 'object', 'player'].includes(String(entry.kind)) || typeof entry.name !== 'string' || typeof entry.target !== 'string') return []
+    const kind = entry.kind as RoomEntity['kind']
+    if (!(kind === 'object' ? /^}o[1-9][0-9]*$/ : /^}c[1-9][0-9]*$/).test(entry.target)) return []
+    return [{ target: entry.target, name: entry.name, kind, takeable: kind === 'object' && entry.takeable === true }]
+  })
+  return { room: parsed.room, entries }
+}
+
+function roomEntityActions(entity: RoomEntity): { label: string; command: string }[] {
+  if (entity.kind === 'mob') return [{ label: 'Attack', command: 'kill' }, { label: 'Fire', command: 'fire' }, { label: 'Lore', command: 'lore' }, { label: 'Look', command: 'look' }]
+  if (entity.kind === 'player') return [{ label: 'Look', command: 'look' }]
+  return [{ label: 'Look', command: 'look' }, { label: 'Examine', command: 'examine' }, { label: 'Read', command: 'read' }, ...(entity.takeable ? [{ label: 'Get', command: 'get' }] : [])]
+}
+
+function RoomContentsPanel({ value, currentRoom, connected, onAction }: {
+  value: MudValue | undefined; currentRoom: number | undefined; connected: boolean; onAction: (command: string) => void
+}) {
+  const [selected, setSelected] = useState<string | null>(null)
+  const contents = parseRoomContents(value)
+  const valid = connected && contents !== null && contents.room === currentRoom
+  const selectedEntity = valid ? contents.entries.find((entry) => entry.target === selected) : undefined
+  if (selected !== null && !selectedEntity) setSelected(null)
+  if (!valid || !contents) return <EmptyTabMessage message="Waiting for current room contents…" />
+  if (!contents.entries.length) return <EmptyTabMessage message="No visible mobs, objects, or other players in this room." />
+  return <div className="room-contents-list">
+    {(['mob', 'object', 'player'] as const).map((kind) => {
+      const entries = contents.entries.filter((entry) => entry.kind === kind)
+      if (!entries.length) return null
+      return <section key={kind} aria-label={kind === 'mob' ? 'Mobs' : kind === 'object' ? 'Objects' : 'Players'}>
+        <h3>{kind === 'mob' ? 'Mobs' : kind === 'object' ? 'Objects' : 'Players'}</h3>
+        <ul>{entries.map((entry) => <li key={entry.target}>
+          <button type="button" className="room-entity-name" aria-expanded={selected === entry.target}
+            onClick={() => setSelected(selected === entry.target ? null : entry.target)} dangerouslySetInnerHTML={{ __html: renderMudHtml(entry.name) }} />
+          {selected === entry.target ? <div className="room-entity-actions" aria-label={`Actions for ${stripMudFormatting(entry.name)}`}>
+            {roomEntityActions(entry).map((action) => <button type="button" key={action.command} onClick={() => { onAction(`${action.command} ${entry.target}`); setSelected(null) }}>{action.label}</button>)}
+          </div> : null}
+        </li>)}</ul>
+      </section>
+    })}
+  </div>
+}
+
+type RoomQuest = { id: number; name: string; description: string; info: string; giver: string; minLevel?: number; maxLevel?: number; time?: number }
+type RoomQuests = { room: number; quests: RoomQuest[] }
+
+function parseRoomQuests(value: MudValue | undefined): RoomQuests | null {
+  if (value === undefined) return null
+  const parsed = normalizeQuestValue(value)
+  if (!isMudRecord(parsed) || !Number.isInteger(parsed.room) || !Array.isArray(parsed.quests)) return null
+  const quests = parsed.quests.flatMap((quest): RoomQuest[] => {
+    if (!isMudRecord(quest) || typeof quest.id !== 'number' || !Number.isSafeInteger(quest.id) || quest.id < 0 || typeof quest.name !== 'string') return []
+    return [{ id: quest.id, name: quest.name, description: typeof quest.description === 'string' ? quest.description : '',
+      info: typeof quest.info === 'string' ? quest.info : '', giver: typeof quest.giver === 'string' ? quest.giver : '',
+      minLevel: typeof quest.minLevel === 'number' ? quest.minLevel : undefined,
+      maxLevel: typeof quest.maxLevel === 'number' ? quest.maxLevel : undefined,
+      time: typeof quest.time === 'number' ? quest.time : undefined }]
+  })
+  return { room: parsed.room as number, quests }
+}
+
+function RoomQuestNotice({ value, currentRoom, connected, onJoin, modalEnabled = true, onOutput }: {
+  value: MudValue | undefined; currentRoom: number | undefined; connected: boolean; onJoin: (command: string) => void; modalEnabled?: boolean; onOutput?: (text: string) => void
+}) {
+  const [openedRoom, setOpenedRoom] = useState<number | null>(null)
+  const available = parseRoomQuests(value)
+  const visible = connected && available !== null && available.room === currentRoom && available.quests.length > 0
+  if (openedRoom !== null && (!visible || !modalEnabled || openedRoom !== currentRoom)) setOpenedRoom(null)
+  if (!visible || !available) return null
+  return (
+    <aside className="room-quest-notice" aria-label="Quests in this room">
+      <div role="status"><strong>Quests available here</strong><span>{available.quests.length} {available.quests.length === 1 ? 'quest you can join' : 'quests you can join'}</span></div>
+      <button type="button" aria-haspopup={modalEnabled ? 'dialog' : undefined} onClick={() => { if (modalEnabled) setOpenedRoom(available.room); else onOutput?.(formatAvailableQuestsOutput(available)) }}>View quests</button>
+      {modalEnabled && openedRoom === available.room ? <WebOutputModal title="Available quests" titleId="room-quests-title" closeLabel="Close available quests" onClose={() => setOpenedRoom(null)}>
+        <p>These quest givers have work for you in this room.</p>
+        <div className="room-quest-list">
+          {available.quests.map((quest) => <section className="room-quest-card" key={quest.id}>
+            <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
+            <p className="room-quest-giver">Offered by <span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.giver) }} /></p>
+            {quest.description ? <p dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.description) }} /> : null}
+            <p className="room-quest-giver">{quest.minLevel !== undefined && quest.maxLevel !== undefined ? `Levels ${quest.minLevel}–${quest.maxLevel} · ` : ''}{quest.time !== undefined && quest.time > 0 ? `Time limit: ${quest.time} turns` : 'No time limit'}</p>
+            <button type="button" onClick={() => { onJoin(`quest webjoin ${available.room} ${quest.id}`); setOpenedRoom(null) }}>Join quest</button>
+          </section>)}
+        </div>
+      </WebOutputModal> : null}
+    </aside>
+  )
+}
+
+type QuestAcceptance = { id: string; name: string; body: string; time?: number; commands: string[] }
+type QuestNotification = { kind: 'accepted'; quest: QuestAcceptance } | { kind: 'complete'; quest: QuestCompletion }
+
+function parseQuestAcceptance(value: MudValue | undefined): QuestAcceptance | null {
+  if (value === undefined) return null
+  const parsed = normalizeQuestValue(value)
+  if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.name !== 'string' || typeof parsed.body !== 'string') return null
+  return { id: parsed.id, name: parsed.name, body: parsed.body,
+    time: typeof parsed.time === 'number' && Number.isFinite(parsed.time) ? parsed.time : undefined,
+    commands: Array.isArray(parsed.commands) ? parsed.commands.filter((command): command is string => typeof command === 'string') : [] }
+}
+
+function QuestAcceptanceModal({ acceptance, onClose }: { acceptance: QuestAcceptance; onClose: () => void }) {
+  return (
+    <WebOutputModal title="Quest accepted!" titleId="quest-acceptance-title" closeLabel="Close quest acceptance" onClose={onClose}>
+      <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(acceptance.name) }} />
+      <article className="help-details-body">
+        {renderWebTextBlocks(acceptance.body)}
+      </article>
+      {acceptance.time !== undefined ? <p>{acceptance.time > 0 ? `Time limit: ${acceptance.time} turns` : 'No time limit'}</p> : null}
+      {acceptance.commands.length ? <p>Dialogue commands: <strong>{acceptance.commands.join(', ')}</strong></p> : null}
+    </WebOutputModal>
+  )
+}
+
+type QuestCompletion = { id: string; name: string; body: string; rewards: Record<string, string | number> }
+
+function parseQuestCompletion(value: MudValue | undefined): QuestCompletion | null {
+  if (value === undefined) return null
+  const parsed = normalizeQuestValue(value)
+  if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.name !== 'string' || typeof parsed.body !== 'string' || !isMudRecord(parsed.rewards)) return null
+  const rewards = Object.fromEntries(Object.entries(parsed.rewards).filter((entry): entry is [string, string | number] =>
+    typeof entry[1] === 'string' || (typeof entry[1] === 'number' && Number.isFinite(entry[1]))))
+  return { id: parsed.id, name: parsed.name, body: parsed.body, rewards }
+}
+
+function QuestCompletionModal({ completion, onClose }: { completion: QuestCompletion; onClose: () => void }) {
+  return (
+    <WebOutputModal title="Quest complete!" titleId="quest-completion-title" closeLabel="Close quest completion" onClose={onClose}>
+      <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(completion.name) }} />
+      <article className="help-details-body">
+        {renderWebTextBlocks(completion.body)}
+      </article>
+      <section aria-labelledby="quest-completion-rewards">
+        <h3 id="quest-completion-rewards">Rewards received</h3>
+        <dl className="quest-details-facts">
+          {Object.entries(completion.rewards).map(([label, value]) => (
+            <Fragment key={label}><dt>{label}</dt><dd dangerouslySetInnerHTML={{ __html: renderMudHtml(typeof value === 'number' ? value.toLocaleString() : value) }} /></Fragment>
+          ))}
+        </dl>
+      </section>
+    </WebOutputModal>
+  )
+}
+
+function formatTextWindowOutput(info: HelpInfo, kind: string): string {
+  return `${kind}${info.topic ? `: ${info.topic}` : ''}\n\n${info.body}${info.truncated ? '\n[Response shortened to the display limit.]' : ''}`
+}
+
+function formatQuestDetailsOutput(quest: QuestEntry): string {
+  return [quest.name ?? 'Quest details', quest.description, quest.type ? `Quest type: ${quest.type}` : '',
+    quest.progress ? `Progress: ${quest.progress.label}` : '', quest.targets ? `Targets: ${quest.targets}` : '',
+    quest.timeRemaining !== undefined && quest.timeRemaining > 0 ? `Time remaining: ${quest.timeRemaining} turns` : '',
+    quest.info, quest.dialogueCommands ? `Dialogue commands: ${quest.dialogueCommands}` : ''].filter(Boolean).join('\n\n')
+}
+
+function formatAvailableQuestsOutput(available: RoomQuests): string {
+  return ['Available quests', ...available.quests.map((quest) => [quest.name, `Offered by: ${quest.giver}`,
+    quest.description,
+    quest.minLevel !== undefined && quest.maxLevel !== undefined ? `Levels ${quest.minLevel}–${quest.maxLevel}` : '',
+    quest.time !== undefined && quest.time > 0 ? `Time limit: ${quest.time} turns` : 'No time limit',
+    `To join: quest webjoin ${available.room} ${quest.id}`].filter(Boolean).join('\n\n'))].join('\n\n')
+}
+
 type HelpInfo = { id: string; topic: string; body: string; truncated: boolean }
 
 function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
@@ -5586,7 +5879,8 @@ function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
 }
 
 function formatWebHelpBlocks(body: string): { text: string; preformatted: boolean }[] {
-  const clean = body.replace(/\t<\/?send\b[^>]*>/gi, '').replace(/\r\n?/g, '\n')
+  // Decode before trimming: a leading tab is part of a Krynn color token.
+  const clean = convertLuminariColorCodes(body.replace(/\t<\/?send\b[^>]*>/gi, '')).replace(/\r\n?/g, '\n')
   const lines = clean.split('\n').filter((line) => !/^[-=_+~]{5,}$/.test(line.replace(ANSI_ESCAPE_PATTERN, '').replace(/(?:@[A-Za-z]|\t.)/g, '').trim()))
   return lines.join('\n').trim().split(/\n[ \t]*\n/).filter(Boolean).map((text) => {
     const plain = text.replace(ANSI_ESCAPE_PATTERN, '').replace(/(?:@[A-Za-z]|\t.)/g, '')
@@ -5595,16 +5889,22 @@ function formatWebHelpBlocks(body: string): { text: string; preformatted: boolea
   })
 }
 
-function HelpInfoModal({ help, onClose }: { help: HelpInfo; onClose: () => void }) {
+function renderWebTextBlocks(body: string): ReactNode[] {
+  // Keep ANSI state across paragraphs, while giving each result its own renderer.
+  const renderer = new AnsiToHtml({ escapeXML: true, stream: true })
+  return formatWebHelpBlocks(body).map((block, index) => block.preformatted
+    ? <pre key={index} dangerouslySetInnerHTML={{ __html: renderer.toHtml(block.text) }} />
+    : <p key={index} dangerouslySetInnerHTML={{ __html: renderer.toHtml(block.text) }} />)
+}
+
+function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' }) {
   return (
-    <WebOutputModal title={help.topic ? `Help: ${help.topic}` : 'Help'} titleId="help-details-title"
-      closeLabel="Close help" className="help-details-modal" onClose={onClose}>
+    <WebOutputModal title={help.topic ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
+      closeLabel={`Close ${kind.toLowerCase()}`} className="help-details-modal" onClose={onClose}>
       <article className="help-details-body">
-        {formatWebHelpBlocks(help.body).map((block, index) => block.preformatted
-          ? <pre key={index} dangerouslySetInnerHTML={{ __html: renderMudHtml(block.text) }} />
-          : <p key={index} dangerouslySetInnerHTML={{ __html: renderMudHtml(block.text) }} />)}
+        {renderWebTextBlocks(help.body)}
       </article>
-      {help.truncated ? <p className="quest-empty">This help response exceeded the display limit and was shortened.</p> : null}
+      {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}
     </WebOutputModal>
   )
 }
@@ -6200,7 +6500,7 @@ function formatUnknownAffectFields(record: Record<string, MudValue>) {
   return entries.length > 0 ? entries.join(' | ') : undefined
 }
 
-function renderQuestNode(value: MudValue, onSelect?: (quest: QuestEntry) => void): ReactNode {
+function renderQuestNode(value: MudValue, onSelect?: (quest: QuestEntry) => void, modalEnabled = true): ReactNode {
   if (value === null || value === undefined) {
     return <span className="quest-empty">No quest data reported yet.</span>
   }
@@ -6212,7 +6512,7 @@ function renderQuestNode(value: MudValue, onSelect?: (quest: QuestEntry) => void
         {compactQuests.map((quest, index) => (
           <div className="quest-compact-item" key={`${quest.name ?? 'quest'}-${index}`}>
             {quest.name ? (onSelect ? (
-              <button type="button" className="quest-compact-name quest-name-button" onClick={() => onSelect(quest)} aria-haspopup="dialog" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
+              <button type="button" className="quest-compact-name quest-name-button" onClick={() => onSelect(quest)} aria-haspopup={modalEnabled ? 'dialog' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
             ) : <div className="quest-compact-name" dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />) : null}
             {quest.type ? (
               <div className="quest-compact-type">

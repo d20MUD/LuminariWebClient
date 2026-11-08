@@ -11,7 +11,7 @@ function extract(name) {
 }
 const context = vm.createContext({ starWarsMsdpVariableKeys: [], REQUIRED_MSDP_VARIABLES: [] })
 vm.runInContext(ts.transpile(['getConfiguredMsdpVariables', 'resolveMsdpVariableKey', 'mapMsdpUpdate'].map(extract).join('\n')), context)
-const variables = { helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
+const variables = { roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
 
 test('help MSDP reports require explicit per-MUD enablement', () => {
   assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('HELP_INFO'), false)
@@ -24,4 +24,46 @@ test('help responses preserve their JSON content through state mapping', () => {
   const payload = JSON.stringify({ id: '1', topic: 'fire', body: 'Help <script> text', truncated: false })
   const update = context.mapMsdpUpdate('HELP_INFO', payload, variables)
   assert.equal(update.helpInfo, payload)
+})
+
+
+test('completion events are subscribed with web modals and preserve payloads', () => {
+  assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('QUEST_COMPLETE'), false)
+  assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('QUEST_COMPLETE'), true)
+  const payload = JSON.stringify({ id: 'done-1', name: 'Quest', body: 'Done', rewards: { Experience: 42 } })
+  assert.equal(context.mapMsdpUpdate('QUEST_COMPLETE', payload, variables).questComplete, payload)
+})
+
+
+test('room quest availability is opt-in and survives state mapping', () => {
+  assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('ROOM_QUESTS'), false)
+  assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('ROOM_QUESTS'), true)
+  const payload = JSON.stringify({ room: 1005, quests: [{ id: 100, name: 'Quest' }] })
+  assert.equal(context.mapMsdpUpdate('ROOM_QUESTS', payload, variables).roomQuests, payload)
+})
+
+
+test('lore responses require web opt-in and preserve the complete output', () => {
+  assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('LORE_INFO'), false)
+  assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('LORE_INFO'), true)
+  const payload = JSON.stringify({ id: 'lore-1', topic: 'guard', body: 'Name: Guard\nLevel: 10', truncated: false })
+  assert.equal(context.mapMsdpUpdate('LORE_INFO', payload, variables).loreInfo, payload)
+})
+
+
+test('quest acceptance events are subscribed and mapped with completion events', () => {
+  for (const variable of ['QUEST_ACCEPTED', 'QUEST_COMPLETE']) {
+    assert.equal(context.getConfiguredMsdpVariables(variables, false).includes(variable), false)
+    assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes(variable), true)
+  }
+  const payload = JSON.stringify({ id: 'accepted-1', name: 'Quest', body: 'Instructions', time: -1, commands: [] })
+  assert.equal(context.mapMsdpUpdate('QUEST_ACCEPTED', payload, variables).questAccepted, payload)
+})
+
+
+test('Krynn room contents reports are subscribed and mapped intact', () => {
+  assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('ROOM_CONTENTS'), false)
+  assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('ROOM_CONTENTS'), true)
+  const payload = JSON.stringify({ room: 1005, entries: [{ target: '}o100', kind: 'object', name: 'a sword', takeable: true }] })
+  assert.equal(context.mapMsdpUpdate('ROOM_CONTENTS', payload, variables).roomContents, payload)
 })

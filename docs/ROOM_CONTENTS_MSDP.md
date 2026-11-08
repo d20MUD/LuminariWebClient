@@ -1,0 +1,26 @@
+# Krynn Room contents tab
+
+The sidebar includes a Room contents tab on Krynn only, enabled by default and
+configurable in Layout. It lists visible mobs, objects and other players by
+short description, using the observer's normal view of identity. Click an entry
+to reveal actions:
+
+- Mobs: Attack, Fire, Lore, Look.
+- Objects: Look, Examine, Read, plus Get when the object has the takeable flag.
+- Players: Look.
+
+Actions use normal commands and their existing visibility, combat, action-cost,
+carry-capacity and pickup checks. Attack sends `kill`. Lore uses the configured
+lore modal. Other results use the main output. Hidden entities are omitted,
+and changing room or disconnecting clears stale entries and selections.
+
+The opt-in `ROOM_CONTENTS` MSDP JSON report has a numeric `room` vnum and an
+`entries` array. Entries contain `target`, `kind`, `name`, and (for objects)
+`takeable`. Exact targets `}c<ID>` and `}o<ID>` are matched only by normal local
+visible-character or object-list lookup, avoiding duplicate-name mistakes.
+Missing or departed targets fail normally instead of selecting another entity.
+Object inspection resolves the selected object's own extra descriptions; Read
+also targets it directly when a noticeboard is present.
+
+The game report, proxy subscription, and tab are connected on dev port 4301.
+Other MUD presets do not show the tab or request this report by default.

@@ -2091,3 +2091,29 @@
   font: 0.85rem/1.5 var(--mono);
   white-space: pre;
 }
+
+.room-quest-notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 1rem; border-bottom: 1px solid var(--accent, #d2ac65); background: rgba(210, 172, 101, 0.1); }
+.room-quest-notice [role="status"] { display: grid; gap: 0.2rem; }
+.room-quest-notice [role="status"] span, .room-quest-giver { color: var(--muted); font-size: 0.9rem; }
+.room-quest-notice > button { flex-shrink: 0; }
+.room-quest-list { display: grid; gap: 1rem; }
+.room-quest-card { border: 1px solid var(--border, #475569); border-radius: 0.65rem; padding: 1rem; }
+.room-quest-card h3 { margin-top: 0; }
+.room-quest-card pre { max-width: 100%; overflow-x: auto; white-space: pre; }
+@media (max-width: 480px) { .room-quest-notice { align-items: flex-start; flex-direction: column; } }
+
+.output-windows-menu { width: min(21rem, calc(100vw - 2rem)); min-width: 0; padding: 1rem; box-sizing: border-box; }
+.output-windows-menu fieldset { border: 0; padding: 0; margin: 0; }
+.output-windows-menu legend { font-weight: 700; margin-bottom: 0.75rem; }
+.output-window-option { display: flex; align-items: center; gap: 0.65rem; padding: 0.45rem 0; cursor: pointer; }
+.output-window-option input { width: 1rem; height: 1rem; accent-color: var(--accent); }
+.output-window-actions { display: flex; gap: 0.5rem; margin-top: 0.8rem; }
+
+.room-contents-list { display: grid; gap: 1rem; }
+.room-contents-list h3 { margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--muted); }
+.room-contents-list ul { list-style: none; padding: 0; margin: 0; }
+.room-contents-list li { padding: 0.35rem 0; }
+.room-entity-name { width: 100%; text-align: left; white-space: normal; }
+.room-entity-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem 0; }
+
+[aria-label="Sidebar sections"].tab-strip { grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); }
