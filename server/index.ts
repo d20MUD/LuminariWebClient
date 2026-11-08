@@ -52,7 +52,8 @@ const WEB_CLIENT_VERSION = '0.1.0'
 const DEFAULT_COLUMNS = 120
 const DEFAULT_ROWS = 40
 const STAR_WARS_MSDP_COMMAND_INTERVAL_MS = 8
-const WEB_SOCKET_PING_INTERVAL_MS = 30_000
+const WEB_SOCKET_PING_INTERVAL_MS = 15_000
+const WEB_SOCKET_PONG_TIMEOUT_MS = 90_000
 const CONTROL_BYTES = new Set([
   MSDP_VAR,
   MSDP_VAL,
@@ -109,7 +110,7 @@ app.get(/^(?!\/ws).*/, (_request, response) => {
 
 wss.on('connection', (socket) => {
   const session = new MudSession(socket)
-  let isAlive = true
+  let lastPongAt = Date.now()
   const heartbeat = setInterval(() => {
     if (socket.readyState !== WebSocket.OPEN) {
       return
@@ -118,12 +119,11 @@ wss.on('connection', (socket) => {
     // A browser normally replies to a WebSocket ping automatically.  Keeping
     // this explicit liveness check prevents an intermediary from silently
     // retaining a dead upgraded connection forever.
-    if (!isAlive) {
+    if (Date.now() - lastPongAt > WEB_SOCKET_PONG_TIMEOUT_MS) {
       socket.terminate()
       return
     }
 
-    isAlive = false
     try {
       socket.ping()
     } catch (error) {
@@ -133,7 +133,7 @@ wss.on('connection', (socket) => {
   }, WEB_SOCKET_PING_INTERVAL_MS)
 
   socket.on('pong', () => {
-    isAlive = true
+    lastPongAt = Date.now()
   })
 
   // `ws` emits error events.  Without this listener an intermittent proxy or
@@ -279,10 +279,12 @@ class MudSession {
     mudSocket.setKeepAlive(true, MUD_TCP_KEEPALIVE_INITIAL_DELAY_MS)
 
     mudSocket.on('connect', () => {
+      if (this.mudSocket !== mudSocket) return
       this.sendStatus('connected', `Connected to ${host}:${port}.`)
     })
 
     mudSocket.on('data', (chunk) => {
+      if (this.mudSocket !== mudSocket) return
       try {
         this.parser?.push(chunk)
       } catch (error) {
@@ -296,10 +298,13 @@ class MudSession {
     })
 
     mudSocket.on('error', (error) => {
+      if (this.mudSocket !== mudSocket) return
       this.sendStatus('error', `Connection error: ${error.message}`)
     })
 
     mudSocket.on('close', () => {
+      // A replaced socket may close after the next connection has started.
+      if (this.mudSocket !== mudSocket) return
       this.cleanupSocket()
       this.sendStatus('disconnected', `Connection to ${host}:${port} closed.`)
     })
@@ -931,7 +936,8 @@ function isAutoLoginSupportedHost(host: string) {
 }
 
 function isAccountNamePrompt(output: string) {
-  return /enter\s+your\s+account\s+name\b[^\r\n]*:\s*$/im.test(output)
+  return /what\s+is\s+your\s+account\s+name\b[^\r\n]*\?\s*$/im.test(output)
+    || /enter\s+your\s+account\s+name\b[^\r\n]*:\s*$/im.test(output)
     || /(?:account\s+)?name\s*:\s*$/im.test(output)
 }
 
