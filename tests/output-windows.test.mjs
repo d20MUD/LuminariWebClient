@@ -250,3 +250,38 @@ test('Who remains compatible with older responses and ignores malformed titles',
   assert.match(html, /Staff member/)
   assert.doesNotMatch(html, /Happy hour|undefined|42/)
 })
+
+test('See Also links only resolved topics and navigates without submitting a form', () => {
+  const visited = []
+  const references = { text: 'See Also: CRAFTING, NOFILE, LITANY OF RIGHTEOUSNESS\n', entries: [
+    { label: 'CRAFTING', topic: 'CRAFTING' }, { label: 'NOFILE' },
+    { label: 'LITANY OF RIGHTEOUSNESS', topic: 'LITANY OF RIGHTEOUSNESS' },
+  ] }
+  const links = context.HelpReferenceLinks({ references, onNavigate: topic => visited.push(topic) })
+  const html = renderToStaticMarkup(links)
+  assert.equal((html.match(/class="help-reference-link"/g) ?? []).length, 2)
+  assert.match(html, /<span>NOFILE<\/span>/)
+  assert.match(html, /type="button"/)
+  links.props.children[1][2].props.children[1].props.onClick()
+  assert.deepEqual(visited, ['LITANY OF RIGHTEOUSNESS'])
+  const info = context.parseHelpInfo({ id: 'references', body: `Intro\n\n${references.text}\nFooter remains.`, seeAlso: references })
+  const rendered = renderToStaticMarkup(context.renderLinkedHelpText(info, () => {}))
+  assert.match(rendered, /Intro/)
+  assert.match(rendered, /Footer remains/)
+  assert.equal((rendered.match(/See also:/g) ?? []).length, 1)
+  assert.equal((rendered.match(/NOFILE/g) ?? []).length, 1)
+})
+
+test('help references reject malformed metadata and command separators, escaping labels', () => {
+  const info = context.parseHelpInfo({ id: 'unsafe', body: 'See Also: example\n', seeAlso: {
+    text: 'See Also: example\n', entries: [null, { label: 42 },
+      { label: '<script>bad</script>', topic: 'foo\nquit' }, { label: 'also bad', topic: 'foo;quit' }],
+  } })
+  assert.equal(info.seeAlso.entries.length, 2)
+  const html = renderToStaticMarkup(context.HelpReferenceLinks({ references: info.seeAlso, onNavigate() {} }))
+  assert.doesNotMatch(html, /help-reference-link|<script>/)
+  assert.match(html, /&lt;script&gt;/)
+  const legacy = context.parseHelpInfo({ id: 'old', body: 'See Also: plain text' })
+  assert.equal(legacy.seeAlso, undefined)
+  assert.match(renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderLinkedHelpText(legacy))), /See Also: plain text/)
+})

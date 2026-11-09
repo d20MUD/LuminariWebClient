@@ -440,3 +440,103 @@ test('feat help keeps labeled fields separate and wraps only their own text', ()
   assert.match(html, /style="color:/)
   assert.match(html, /Level 12/)
 })
+
+test('quest history parses native list/detail payloads and rejects invalid identities', () => {
+  const list = context.parseQuestHistory(JSON.stringify({ id: 'history-1', kind: 'list', total: 51, page: 0, pages: 2,
+    entries: [{ questId: 70001, name: '\tCCompleted adventure\tn', available: true }, { questId: -1, name: 'bad' }],
+  }))
+  assert.equal(list.total, 51)
+  assert.equal(list.entries.length, 1)
+  assert.equal(list.entries[0].questId, 70001)
+  assert.equal(context.parseQuestHistory(undefined), null)
+  assert.equal(context.parseQuestHistory({ kind: 'list' }), null)
+  const detail = context.parseQuestHistory({ id: 'history-2', kind: 'detail', questId: 70001,
+    name: 'A past quest', info: 'First paragraph\n\n\tRSecond paragraph\tn', completion: 'Finished!' })
+  assert.equal(detail.quest.completion, 'Finished!')
+  assert.match(detail.quest.info, /\n\n/)
+})
+
+test('quest history names and paging are text links, preserving colors and escaping markup', () => {
+  const selected = [], pages = []
+  const data = context.parseQuestHistory({ id: 'list', kind: 'list', total: 51, page: 0, pages: 2, entries: [
+    { questId: 70001, name: '\tCCompleted adventure\tn', available: true },
+    { questId: 70002, name: '<script>old</script>', available: false },
+  ] })
+  const tree = context.QuestHistoryContent({ data, pending: false, onSelect: id => selected.push(id), onPage: page => pages.push(page) })
+  const html = renderToStaticMarkup(tree)
+  assert.match(html, /<a href="#quest-history"/)
+  assert.doesNotMatch(html, /<button|<script>|\tC/)
+  assert.match(html, /Completed adventure/)
+  assert.match(html, /color:/)
+  assert.match(html, /no longer available/)
+  assert.match(html, /Page 1 of 2/)
+  const list = tree.props.children[2].props.children[1]
+  list.props.children[0].props.children.props.onClick()
+  assert.deepEqual(selected, [70001])
+  const link = context.QuestHistoryTextLink({ children: 'Quest history', onClick: () => pages.push(1) })
+  let prevented = false
+  link.props.onClick({ preventDefault() { prevented = true } })
+  assert.equal(prevented, true)
+  assert.deepEqual(pages, [1])
+})
+
+test('quest history displays empty, loading, errors and completed quest details', () => {
+  const render = (data, pending = false) => renderToStaticMarkup(context.QuestHistoryContent({ data, pending, onSelect() {}, onPage() {} }))
+  assert.match(render(null, true), /Loading quest history/)
+  assert.match(render(context.parseQuestHistory({ id: 'empty', kind: 'list', entries: [], total: 0 })), /haven’t completed/)
+  assert.match(render(context.parseQuestHistory({ id: 'err', kind: 'detail', error: 'Quest unavailable' })), /role="alert"/)
+  const detail = context.parseQuestHistory({ id: 'detail', kind: 'detail', questId: 70001, name: 'Quest',
+    description: 'Summary', info: 'One\n\n\tRTwo\tn', completion: '<script>bad</script>' })
+  const html = render(detail)
+  assert.match(html, /Completed quest/)
+  assert.match(html, /Quest information/)
+  assert.match(html, /Completion/)
+  assert.doesNotMatch(html, /<script>|\tR/)
+})
+
+test('quest history link requests MSDP pages/details and respects Windows preferences', () => {
+  const originalState = context.useState, originalEffect = context.useEffect
+  const state = [], commands = []
+  let cursor, dependency, effects = []
+  context.useState = initial => { const index = cursor++; if (!(index in state)) state[index] = initial; return [state[index], value => { state[index] = value }] }
+  context.useEffect = (effect, deps) => { if (dependency !== deps[0]) { dependency = deps[0]; effects.push(effect) } }
+  let value
+  const render = (modalEnabled = true) => {
+    cursor = 0
+    const tree = context.QuestHistoryBrowser({ value, modalEnabled, onRequest: command => commands.push(command) })
+    for (const effect of effects.splice(0)) effect()
+    return tree
+  }
+  try {
+    let tree = render()
+    tree.props.children[0].props.children.props.onClick()
+    assert.deepEqual(commands, ['quest webhistory 0'])
+    assert.equal(state[0], true)
+    value = { id: 'history', kind: 'list', entries: [{ questId: 70001, name: 'Completed', available: true }], total: 1 }
+    render(); tree = render()
+    let modal = tree.props.children[1]
+    modal.props.children[1].props.onSelect(70001)
+    assert.equal(commands.at(-1), 'quest webhistorydetail 70001')
+    value = { id: 'detail', kind: 'detail', questId: 70001, name: 'Completed', info: 'Past info' }
+    render(); tree = render(); modal = tree.props.children[1]
+    assert.equal(modal.props.children[1].props.data.quest.info, 'Past info')
+    modal.props.children[0].props.children.props.onClick() // Back restores the history list.
+    assert.equal(state[2].kind, 'list')
+    modal.props.onClose()
+    tree = render(false);tree.props.children[0].props.children.props.onClick()
+    assert.equal(commands.at(-1), 'quest history')
+    assert.equal(state[0], false)
+  } finally { context.useState = originalState; context.useEffect = originalEffect }
+})
+
+test('QUEST_HISTORY travels through the gateway as structured data', () => {
+  const server = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8')
+  const ast = ts.createSourceFile('server.ts', server, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+  const helpers = ast.statements.filter(ts.isFunctionDeclaration).map(node => node.getText(ast)).filter(text => !text.includes('import.meta')).join('\n')
+  const gateway = vm.createContext({})
+  vm.runInContext(ts.transpile(helpers, { target: ts.ScriptTarget.ES2022 }), gateway)
+  const payload = JSON.stringify({ id: 'request', kind: 'list', total: 1, page: 0, pages: 1, entries: [{ questId: 70001, name: 'Completed', available: true }] })
+  const update = gateway.mapMsdpUpdate('QUEST_HISTORY', payload, { questHistory: 'QUEST_HISTORY' })
+  assert.equal(update.questHistory, payload)
+  assert.equal(context.parseQuestHistory(update.questHistory).entries[0].questId, 70001)
+})

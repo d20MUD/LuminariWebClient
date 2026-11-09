@@ -3635,7 +3635,7 @@ function App() {
       {infoModals[0] ? <HelpInfoModal key={infoModals[0].info.id} kind={infoModals[0].kind} help={infoModals[0].info} onClose={() => setInfoModals((current) => current.slice(1))} /> : null}
 
       {selectedMudPreset?.features?.helpModal && clientSettings.windows.help && helpModal ? (
-        <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} />
+        <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} onNavigate={(topic) => sendInputLine(`help ${topic}`)} />
       ) : null}
 
       <main
@@ -3934,7 +3934,7 @@ function App() {
 
                   {resolvedActiveSidebarTab === 'quests' ? (
                     mudState.questInfo ? (
-                      <QuestInfoPanel key={selectedMudId} value={mudState.questInfo} detailsEnabled={selectedMudPreset?.features?.questDetails === true} modalEnabled={clientSettings.windows.questDetails} onOutput={appendWindowOutput} />
+                      <QuestInfoPanel key={`${selectedMudId}:${mudState.characterName ?? ''}`} value={mudState.questInfo} detailsEnabled={selectedMudPreset?.features?.questDetails === true} modalEnabled={clientSettings.windows.questDetails} onOutput={appendWindowOutput} historyValue={mudState.questHistory} onRequestHistory={sendInputLine} />
                     ) : (
                       <EmptyTabMessage message="No quest data reported yet." />
                     )
@@ -5746,13 +5746,15 @@ function GroupResourceView({ resource }: { resource: GroupResource }) {
 }
 
 type QuestInfoPanelProps = {
+  historyValue?: MudValue
+  onRequestHistory?: (command: string) => void
   value: MudValue
   detailsEnabled: boolean
   modalEnabled?: boolean
   onOutput?: (text: string) => void
 }
 
-function QuestInfoPanel({ value, detailsEnabled, modalEnabled = true, onOutput }: QuestInfoPanelProps) {
+function QuestInfoPanel({ value, detailsEnabled, modalEnabled = true, onOutput, historyValue, onRequestHistory }: QuestInfoPanelProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const normalizedValue = normalizeQuestValue(value)
   const selectedQuest = detailsEnabled && modalEnabled
@@ -5764,8 +5766,97 @@ function QuestInfoPanel({ value, detailsEnabled, modalEnabled = true, onOutput }
     <div className="tab-inline-output quest-html-output">
       {renderQuestNode(normalizedValue, detailsEnabled ? (quest) => { if (modalEnabled) setSelectedId(quest.id); else onOutput?.(formatQuestDetailsOutput(quest)) } : undefined, modalEnabled)}
       {selectedQuest ? <QuestDetailsModal quest={selectedQuest} onClose={() => setSelectedId(null)} /> : null}
+      {detailsEnabled && onRequestHistory ? <QuestHistoryBrowser value={historyValue} modalEnabled={modalEnabled} onRequest={onRequestHistory} /> : null}
     </div>
   )
+}
+
+type QuestHistoryEntry = { questId: number; name: string; available: boolean }
+type QuestHistoryData = {
+  id: string; kind: 'list' | 'detail'; error?: string
+  entries: QuestHistoryEntry[]; total: number; page: number; pages: number
+  quest?: { questId: number; name: string; description: string; info: string; completion: string }
+}
+
+function parseQuestHistory(value: MudValue | undefined): QuestHistoryData | null {
+  if (value === undefined) return null
+  const data = normalizeQuestValue(value)
+  if (!isMudRecord(data) || typeof data.id !== 'string' || (data.kind !== 'list' && data.kind !== 'detail')) return null
+  const number = (value: MudValue | undefined, fallback: number) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : fallback
+  const entries = Array.isArray(data.entries) ? data.entries.flatMap((entry): QuestHistoryEntry[] => {
+    if (!isMudRecord(entry) || typeof entry.name !== 'string' || number(entry.questId, -1) < 0) return []
+    return [{ questId: entry.questId as number, name: entry.name, available: entry.available === true }]
+  }) : []
+  const text = (value: MudValue | undefined) => typeof value === 'string' ? value : ''
+  return { id: data.id, kind: data.kind, error: typeof data.error === 'string' ? data.error : undefined,
+    entries, total: number(data.total, entries.length), page: number(data.page, 0), pages: Math.max(1, number(data.pages, 1)),
+    quest: data.kind === 'detail' && number(data.questId, -1) >= 0 && typeof data.name === 'string'
+      ? { questId: data.questId as number, name: data.name, description: text(data.description), info: text(data.info), completion: text(data.completion) } : undefined }
+}
+
+function QuestHistoryTextLink({ children, onClick, disabled = false }: { children: ReactNode; onClick: () => void; disabled?: boolean }) {
+  return <a href="#quest-history" className="quest-history-link" aria-disabled={disabled || undefined}
+    onClick={(event) => { event.preventDefault(); if (!disabled) onClick() }}>{children}</a>
+}
+
+function QuestHistoryContent({ data, pending, onSelect, onPage }: {
+  data: QuestHistoryData | null; pending: boolean; onSelect: (id: number) => void; onPage: (page: number) => void
+}) {
+  return <>
+    {pending ? <p role="status">Loading quest history…</p> : null}
+    {data?.error ? <p role="alert">{data.error}</p> : null}
+    {data?.quest ? <>
+      <p>Completed quest</p>
+      {data.quest.description ? <div>{renderWebTextBlocks(data.quest.description)}</div> : null}
+      <h3>Quest information</h3>
+      <div>{renderWebTextBlocks(data.quest.info || 'No quest information is available.')}</div>
+      {data.quest.completion ? <><h3>Completion</h3><div>{renderWebTextBlocks(data.quest.completion)}</div></> : null}
+    </> : data?.kind === 'list' && !data.error ? <>
+      <p>{data.total} completed {data.total === 1 ? 'quest' : 'quests'}</p>
+      {data.entries.length ? <ul className="quest-history-list">{data.entries.map((quest, index) => <li key={`${quest.questId}:${index}`}>
+        {quest.available ? <QuestHistoryTextLink disabled={pending} onClick={() => onSelect(quest.questId)}>
+          <span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
+        </QuestHistoryTextLink> : <span>{quest.name} (no longer available)</span>}
+      </li>)}</ul> : <p>You haven’t completed any quests yet.</p>}
+      {data.pages > 1 ? <nav aria-label="Quest history pages">
+        {data.page > 0 ? <QuestHistoryTextLink disabled={pending} onClick={() => onPage(data.page - 1)}>Previous</QuestHistoryTextLink> : null}
+        <span> Page {data.page + 1} of {data.pages} </span>
+        {data.page + 1 < data.pages ? <QuestHistoryTextLink disabled={pending} onClick={() => onPage(data.page + 1)}>Next</QuestHistoryTextLink> : null}
+      </nav> : null}
+    </> : null}
+  </>
+}
+
+function QuestHistoryBrowser({ value, modalEnabled, onRequest }: { value?: MudValue; modalEnabled: boolean; onRequest: (command: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [result, setResult] = useState<QuestHistoryData | null>(null)
+  const [listing, setListing] = useState<QuestHistoryData | null>(null)
+  const [previousValue, setPreviousValue] = useState(value)
+  if (value !== previousValue) {
+    setPreviousValue(value)
+    const data = parseQuestHistory(value)
+    if (data) {
+      setResult(data)
+      if (data.kind === 'list' && !data.error) setListing(data)
+      setPending(false)
+    }
+  }
+  if (open && !modalEnabled) setOpen(false)
+  function request(command: string) { setPending(true); onRequest(command) }
+  return <>
+    <p className="quest-history-footer"><QuestHistoryTextLink onClick={() => {
+      if (!modalEnabled) { onRequest('quest history'); return }
+      setOpen(true); setResult(null); request('quest webhistory 0')
+    }}>Quest history</QuestHistoryTextLink></p>
+    {open && modalEnabled ? <WebOutputModal
+      title={result?.quest ? <span dangerouslySetInnerHTML={{ __html: renderMudHtml(result.quest.name) }} /> : 'Quest history'}
+      titleId="quest-history-title" closeLabel="Close quest history" onClose={() => setOpen(false)}>
+      {result?.kind === 'detail' ? <p><QuestHistoryTextLink onClick={() => { setResult(listing); setPending(false) }}>Back to quest history</QuestHistoryTextLink></p> : null}
+      <QuestHistoryContent data={result} pending={pending}
+        onSelect={(id) => request(`quest webhistorydetail ${id}`)} onPage={(page) => request(`quest webhistory ${page}`)} />
+    </WebOutputModal> : null}
+  </>
 }
 
 function WebOutputModal({ title, titleId, closeLabel, className = '', onClose, children }: {
@@ -6018,7 +6109,8 @@ function formatAvailableQuestsOutput(available: RoomQuests): string {
 
 type InfoField = { section: string; label: string; value: string }
 type InfoPlayer = { name: string; role: string; staffTitle?: string; level?: number; race?: string; faction?: string; afk?: boolean; roleplay?: boolean }
-type HelpInfo = { id: string; topic: string; body: string; truncated: boolean; fields?: InfoField[]; players?: InfoPlayer[] }
+type HelpReferences = { text: string; entries: { label: string; topic?: string }[] }
+type HelpInfo = { seeAlso?: HelpReferences; id: string; topic: string; body: string; truncated: boolean; fields?: InfoField[]; players?: InfoPlayer[] }
 
 function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
   if (value === undefined) return null
@@ -6035,7 +6127,13 @@ function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
       ...(typeof player.faction === 'string' ? { faction: player.faction } : {}),
       afk: player.afk === true, roleplay: player.roleplay === true }]
   }) : undefined
-  return { id: parsed.id, topic: typeof parsed.topic === 'string' ? parsed.topic.trim() : '', body: parsed.body, truncated: parsed.truncated === true, fields, players }
+  const seeAlso = isMudRecord(parsed.seeAlso) && typeof parsed.seeAlso.text === 'string' && Array.isArray(parsed.seeAlso.entries)
+    ? { text: parsed.seeAlso.text, entries: parsed.seeAlso.entries.flatMap((entry) => {
+      if (!isMudRecord(entry) || typeof entry.label !== 'string') return []
+      const topic = typeof entry.topic === 'string' && entry.topic.length > 0 && !/[\r\n;]/.test(entry.topic) ? entry.topic : undefined
+      return [{ label: entry.label, topic }]
+    }) } : undefined
+  return { id: parsed.id, topic: typeof parsed.topic === 'string' ? parsed.topic.trim() : '', body: parsed.body, truncated: parsed.truncated === true, fields, players, seeAlso }
 }
 
 function reflowModalText(body: string): string {
@@ -6091,8 +6189,8 @@ function StructuredInfo({ help }: { help: HelpInfo }) {
     {help.players ? <section aria-label="Visible players">
       <p>{help.players.length} visible {help.players.length === 1 ? 'player' : 'players'}</p>
       <ul className="web-who-list">{help.players.map((player, index) => <li key={index}>
-        <strong dangerouslySetInnerHTML={{ __html: renderMudHtml(player.name) }} />
-        <span dangerouslySetInnerHTML={{ __html: renderMudHtml([player.role, player.staffTitle, player.level !== undefined ? `Level ${player.level}` : '', player.race, player.faction, player.afk ? 'AFK' : '', player.roleplay ? 'RP' : ''].filter(Boolean).join(' · ')) }} />
+        <strong className="web-who-name" dangerouslySetInnerHTML={{ __html: renderMudHtml(player.name) }} />
+        <span className="web-who-details" dangerouslySetInnerHTML={{ __html: renderMudHtml([player.role, player.staffTitle, player.level !== undefined ? `Level ${player.level}` : '', player.race, player.faction, player.afk ? 'AFK' : '', player.roleplay ? 'RP' : ''].filter(Boolean).join(' · ')) }} />
       </li>)}</ul>
     </section> : null}
     <div className="web-info-sections">{sections.map((section) => <section key={section} className={section === 'Description' ? 'web-info-description' : undefined}>
@@ -6105,12 +6203,34 @@ function StructuredInfo({ help }: { help: HelpInfo }) {
   </>
 }
 
-function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' | 'Loot' }) {
+function HelpReferenceLinks({ references, onNavigate }: { references: HelpReferences; onNavigate?: (topic: string) => void }) {
+  return <section className="help-see-also" aria-label="See also">
+    <strong>See also: </strong>
+    {references.entries.map((entry, index) => <Fragment key={index}>
+      {index > 0 ? ', ' : ''}
+      {entry.topic && onNavigate ? <button type="button" className="help-reference-link" onClick={() => onNavigate(entry.topic!)}>{entry.label}</button> : <span>{entry.label}</span>}
+    </Fragment>)}
+  </section>
+}
+
+function renderLinkedHelpText(help: HelpInfo, onNavigate?: (topic: string) => void): ReactNode {
+  const references = help.seeAlso
+  const index = references?.text ? help.body.indexOf(references.text) : -1
+  if (!references || index < 0) return renderWebTextBlocks(help.body)
+  return <>
+    {renderWebTextBlocks(help.body.slice(0, index))}
+    <HelpReferenceLinks references={references} onNavigate={onNavigate} />
+    {renderWebTextBlocks(help.body.slice(index + references.text.length))}
+  </>
+}
+
+function HelpInfoModal({ help, onClose, onNavigate, kind = 'Help' }: { help: HelpInfo; onClose: () => void; onNavigate?: (topic: string) => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' | 'Loot' }) {
   return (
     <WebOutputModal title={help.topic && help.topic.trim().toLowerCase() !== kind.toLowerCase() ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
       closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}`} onClose={onClose}>
       <article className="help-details-body">
-        {help.fields?.length || help.players ? <StructuredInfo help={help} /> : kind === 'Help' ? renderWebTextBlocks(help.body) : renderCommandText(help.body)}
+        {help.fields?.length || help.players ? <StructuredInfo help={help} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(help.body)}
+        {kind === 'Help' && (help.fields?.length || help.players) && help.seeAlso ? <HelpReferenceLinks references={help.seeAlso} onNavigate={onNavigate} /> : null}
       </article>
       {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}
     </WebOutputModal>

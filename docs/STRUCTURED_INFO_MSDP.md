@@ -60,3 +60,24 @@ time and each positive bonus (including crafting/harvesting-only events).
 An inactive or expired happy hour adds no section. These additions use the
 existing WHO_INFO payload and field renderer; older clients retain the full
 command output fallback.
+
+HELP_INFO may include `seeAlso: { text, entries: [{ label, topic? }] }`.
+`text` is the original See Also section (including its display codes), used
+to replace that section in place without losing surrounding content. Entries
+always retain their labels, but only resolved, accessible help topics include
+`topic`. The modal renders those as keyboard-accessible help links, sending
+one `help <topic>` command and replacing the current help result. Missing or
+restricted topics remain plain text. The body remains unchanged for terminal
+fallback and older clients. Lookup is bounded to 32 references per response;
+files exceeding that limit retain their original text. Wrapped, comma-separated
+multiword topics and file aliases are supported. Dynamic help handlers are
+probed in isolated captures, without publishing suggestions or extra MSDP events.
+
+Quest history uses `QUEST_HISTORY` / `MudState.questHistory`. The Quests footer
+requests `quest webhistory 0` (50 entries per page); text links request
+`quest webhistorydetail <questId>`. List responses carry `id`, `kind: "list"`,
+`entries: [{questId,name,available}]`, `total`, `page`, `pages`. Details carry
+`kind: "detail"`, `questId`, `name`, `description`, `info`, `completion`.
+Errors use `error`; all responses have unique IDs. The server permits details
+only for the requesting character's saved completions. The Quest details
+Windows preference routes the footer to terminal history when disabled.

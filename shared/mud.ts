@@ -98,6 +98,7 @@ export interface MudState {
   roomContents?: MudValue
   roomQuests?: MudValue
   questAccepted?: MudValue
+  questHistory?: MudValue
   questComplete?: MudValue
   scoreInfo?: MudValue
   whoInfo?: MudValue
@@ -169,6 +170,7 @@ export const defaultMsdpVariables = {
   roomContents: 'ROOM_CONTENTS',
   roomQuests: 'ROOM_QUESTS',
   questAccepted: 'QUEST_ACCEPTED',
+  questHistory: 'QUEST_HISTORY',
   questComplete: 'QUEST_COMPLETE',
   scoreInfo: 'SCORE_INFO',
   whoInfo: 'WHO_INFO',
@@ -297,6 +299,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     roomContents: normalizeMsdpVariableValue(raw.roomContents, defaultMsdpVariables.roomContents),
     roomQuests: normalizeMsdpVariableValue(raw.roomQuests, defaultMsdpVariables.roomQuests),
     questAccepted: normalizeMsdpVariableValue(raw.questAccepted, defaultMsdpVariables.questAccepted),
+    questHistory: normalizeMsdpVariableValue(raw.questHistory, defaultMsdpVariables.questHistory),
     questComplete: normalizeMsdpVariableValue(raw.questComplete, defaultMsdpVariables.questComplete),
     scoreInfo: normalizeMsdpVariableValue(raw.scoreInfo, defaultMsdpVariables.scoreInfo),
     whoInfo: normalizeMsdpVariableValue(raw.whoInfo, defaultMsdpVariables.whoInfo),

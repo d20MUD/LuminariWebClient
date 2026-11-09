@@ -2236,9 +2236,10 @@
 .web-info-sections dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.4rem 0.75rem; margin: 0; }
 .web-info-sections dt { color: var(--muted); }
 .web-info-sections dd { margin: 0; text-align: right; }
-.web-who-list { display: grid; gap: 0.6rem; padding: 0; list-style: none; }
-.web-who-list li { display: grid; gap: 0.3rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.6rem; }
-.web-who-list span { color: var(--muted); font-size: 0.85rem; }
+.web-who-list { display: grid; gap: 0.1rem; margin: 0.35rem 0 0.75rem; padding: 0; list-style: none; }
+.web-who-list > li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.65rem; min-width: 0; padding: 0.15rem 0; line-height: 1.5; overflow-wrap: anywhere; }
+.web-who-name { min-width: 0; max-width: 100%; color: var(--accent); }
+.web-who-details { min-width: 0; color: var(--muted); font-size: 0.85rem; }
 .web-info-original { margin-top: 1rem; }
 
 /* Command results contain long feat names and prose as well as numeric stats. */
@@ -2259,3 +2260,14 @@
 .web-info-description { grid-column: 1 / -1; }
 .web-info-empty-label { display: none; }
 .web-info-prose { grid-column: 1 / -1; }
+
+.help-see-also { margin-top: 1rem; line-height: 1.7; overflow-wrap: anywhere; }
+.help-reference-link { padding: 0; border: 0; border-radius: 0; background: none; color: var(--accent, #e8b665); font: inherit; text-decoration: underline; cursor: pointer; }
+.help-reference-link:hover { background: none; text-decoration-thickness: 2px; }
+.help-reference-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+
+.quest-history-footer { margin-top: 1rem; }
+.quest-history-link { color: var(--accent, #e8b665); text-decoration: underline; cursor: pointer; }
+.quest-history-link[aria-disabled="true"] { opacity: .6; cursor: wait; }
+.quest-history-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+.quest-history-list { padding-left: 1.3rem; line-height: 1.8; overflow-wrap: anywhere; }
