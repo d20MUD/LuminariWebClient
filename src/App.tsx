@@ -45,8 +45,8 @@ const COMMAND_HISTORY_LIMIT = 100
 const AUTOMATION_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 const AUTOMATION_COOKIE_CHUNK_SIZE = 3000
 const AUTOMATION_RECURSION_LIMIT = 10
-// Keep the unfinished creation UI available in code, but hide its entry point.
-const ENABLE_UI_CHARACTER_CREATION = false
+// Toggle the character creation entry point without removing the creation UI.
+const ENABLE_UI_CHARACTER_CREATION = true
 const CLIENT_CONFIG_EXPORT_VERSION = 1
 const WEBSOCKET_RECONNECT_INITIAL_DELAY_MS = 1000
 const WEBSOCKET_RECONNECT_MAX_DELAY_MS = 30_000
@@ -254,6 +254,8 @@ type AutoLoginProfile = {
 const OUTPUT_WINDOWS = [
   { id: 'help', label: 'Help' },
   { id: 'lore', label: 'Lore' },
+  { id: 'score', label: 'Score' },
+  { id: 'who', label: 'Who' },
   { id: 'questAcceptance', label: 'Quest acceptance' },
   { id: 'questCompletion', label: 'Quest completion' },
   { id: 'availableQuests', label: 'Available quests' },
@@ -262,7 +264,7 @@ const OUTPUT_WINDOWS = [
 
 type OutputWindowId = (typeof OUTPUT_WINDOWS)[number]['id']
 type WindowPreferences = Record<OutputWindowId, boolean>
-const DEFAULT_WINDOW_PREFERENCES: WindowPreferences = { help: true, lore: true, questAcceptance: true, questCompletion: true, availableQuests: true, questDetails: true }
+const DEFAULT_WINDOW_PREFERENCES: WindowPreferences = { help: true, lore: true, score: true, who: true, questAcceptance: true, questCompletion: true, availableQuests: true, questDetails: true }
 
 function OutputWindowsControls({ windows, onChange }: { windows: WindowPreferences; onChange: (updates: Partial<WindowPreferences>) => void }) {
   return <>
@@ -691,6 +693,8 @@ function App() {
   const [questNotifications, setQuestNotifications] = useState<QuestNotification[]>([])
   const lastQuestAcceptanceIdRef = useRef<string | null>(null)
   const lastQuestCompletionIdRef = useRef<string | null>(null)
+  const [infoModals, setInfoModals] = useState<{ kind: 'Score' | 'Who'; info: HelpInfo }[]>([])
+  const lastInfoIdsRef = useRef<Record<string, string>>({})
   const [loreModals, setLoreModals] = useState<HelpInfo[]>([])
   const lastLoreResponseIdRef = useRef<string | null>(null)
   const [helpModal, setHelpModal] = useState<HelpInfo | null>(null)
@@ -1048,6 +1052,8 @@ function App() {
             setQuestNotifications([])
             lastQuestCompletionIdRef.current = null
             lastQuestAcceptanceIdRef.current = null
+            setInfoModals([])
+            lastInfoIdsRef.current = {}
             setLoreModals([])
             lastLoreResponseIdRef.current = null
             setHelpModal(null)
@@ -1099,6 +1105,14 @@ function App() {
         if (completion && completion.id !== lastQuestCompletionIdRef.current) {
           lastQuestCompletionIdRef.current = completion.id
           if (clientSettingsRef.current.windows.questCompletion) setQuestNotifications((current) => [...current, { kind: 'complete', quest: completion }])
+        }
+        for (const [key, kind, value] of [['score', 'Score', message.state.scoreInfo], ['who', 'Who', message.state.whoInfo]] as const) {
+          const info = parseHelpInfo(value)
+          if (info && info.id !== lastInfoIdsRef.current[key]) {
+            lastInfoIdsRef.current[key] = info.id
+            if (clientSettingsRef.current.windows[key]) setInfoModals((current) => [...current, { kind, info }])
+            else appendWindowOutput(formatTextWindowOutput(info, kind))
+          }
         }
         const loreResponse = parseHelpInfo(message.state.loreInfo)
         if (loreResponse && loreResponse.id !== lastLoreResponseIdRef.current) {
@@ -1810,6 +1824,8 @@ function App() {
       loreModals.forEach((lore) => appendWindowOutput(formatTextWindowOutput(lore, 'Lore')))
       setLoreModals([])
     }
+    infoModals.filter(({ kind }) => !windows[kind === 'Score' ? 'score' : 'who']).forEach(({ info, kind }) => appendWindowOutput(formatTextWindowOutput(info, kind)))
+    setInfoModals((current) => current.filter(({ kind }) => windows[kind === 'Score' ? 'score' : 'who']))
     setQuestNotifications((current) => current.filter((notice) => windows[notice.kind === 'accepted' ? 'questAcceptance' : 'questCompletion']))
     const next = { ...clientSettingsRef.current, windows }
     clientSettingsRef.current = next
@@ -3601,6 +3617,8 @@ function App() {
       {selectedMudId === 'krynn' && clientSettings.windows.lore && loreModals[0] ? (
         <HelpInfoModal key={loreModals[0].id} kind="Lore" help={loreModals[0]} onClose={() => setLoreModals((current) => current.slice(1))} />
       ) : null}
+
+      {selectedMudId === 'krynn' && infoModals[0] ? <HelpInfoModal key={infoModals[0].info.id} kind={infoModals[0].kind} help={infoModals[0].info} onClose={() => setInfoModals((current) => current.slice(1))} /> : null}
 
       {selectedMudPreset?.features?.helpModal && clientSettings.windows.help && helpModal ? (
         <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} />
@@ -5955,13 +5973,25 @@ function formatAvailableQuestsOutput(available: RoomQuests): string {
     `To join: quest webjoin ${available.room} ${quest.id}`].filter(Boolean).join('\n\n'))].join('\n\n')
 }
 
-type HelpInfo = { id: string; topic: string; body: string; truncated: boolean }
+type InfoField = { section: string; label: string; value: string }
+type InfoPlayer = { name: string; role: string; level?: number; race?: string; faction?: string; afk?: boolean; roleplay?: boolean }
+type HelpInfo = { id: string; topic: string; body: string; truncated: boolean; fields?: InfoField[]; players?: InfoPlayer[] }
 
 function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
   if (value === undefined) return null
   const parsed = normalizeQuestValue(value)
   if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.body !== 'string') return null
-  return { id: parsed.id, topic: typeof parsed.topic === 'string' ? parsed.topic.trim() : '', body: parsed.body, truncated: parsed.truncated === true }
+  const fields = Array.isArray(parsed.fields) ? parsed.fields.filter((field): field is InfoField =>
+    isMudRecord(field) && typeof field.section === 'string' && typeof field.label === 'string' && typeof field.value === 'string') : undefined
+  const players = Array.isArray(parsed.players) ? parsed.players.flatMap((player): InfoPlayer[] => {
+    if (!isMudRecord(player) || typeof player.name !== 'string' || typeof player.role !== 'string') return []
+    return [{ name: player.name, role: player.role,
+      ...(typeof player.level === 'number' ? { level: player.level } : {}),
+      ...(typeof player.race === 'string' ? { race: player.race } : {}),
+      ...(typeof player.faction === 'string' ? { faction: player.faction } : {}),
+      afk: player.afk === true, roleplay: player.roleplay === true }]
+  }) : undefined
+  return { id: parsed.id, topic: typeof parsed.topic === 'string' ? parsed.topic.trim() : '', body: parsed.body, truncated: parsed.truncated === true, fields, players }
 }
 
 function reflowModalText(body: string): string {
@@ -6004,12 +6034,32 @@ function renderWebTextBlocks(body: string): ReactNode[] {
   return [<span key="text" className="modal-flow-text" dangerouslySetInnerHTML={{ __html: renderer.toHtml(reflowModalText(body)) }} />]
 }
 
-function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' }) {
+function StructuredInfo({ help }: { help: HelpInfo }) {
+  const sections = [...new Set(help.fields?.map((field) => field.section) ?? [])]
+  return <>
+    {help.players ? <section aria-label="Visible players">
+      <p>{help.players.length} visible {help.players.length === 1 ? 'player' : 'players'}</p>
+      <ul className="web-who-list">{help.players.map((player, index) => <li key={index}>
+        <strong dangerouslySetInnerHTML={{ __html: renderMudHtml(player.name) }} />
+        <span dangerouslySetInnerHTML={{ __html: renderMudHtml([player.role, player.level !== undefined ? `Level ${player.level}` : '', player.race, player.faction, player.afk ? 'AFK' : '', player.roleplay ? 'RP' : ''].filter(Boolean).join(' · ')) }} />
+      </li>)}</ul>
+    </section> : null}
+    <div className="web-info-sections">{sections.map((section) => <section key={section}>
+      <h3>{section}</h3><dl>{help.fields?.filter((field) => field.section === section).map((field, index) => <Fragment key={index}>
+        <dt dangerouslySetInnerHTML={{ __html: renderMudHtml(field.label) }} />
+        <dd dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />
+      </Fragment>)}</dl>
+    </section>)}</div>
+    {help.body ? <details className="web-info-original" open={!help.fields?.length && !help.players?.length}><summary>Full command output</summary>{renderWebTextBlocks(help.body)}</details> : null}
+  </>
+}
+
+function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' }) {
   return (
     <WebOutputModal title={help.topic ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
       closeLabel={`Close ${kind.toLowerCase()}`} className="help-details-modal" onClose={onClose}>
       <article className="help-details-body">
-        {renderWebTextBlocks(help.body)}
+        {help.fields?.length || help.players ? <StructuredInfo help={help} /> : renderWebTextBlocks(help.body)}
       </article>
       {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}
     </WebOutputModal>

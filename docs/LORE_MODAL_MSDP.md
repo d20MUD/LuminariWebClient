@@ -1,8 +1,9 @@
 # Lore results modal
 
 On Krynn, `lore <mob>` and `lore <object>` open a native browser dialog with
-formatted result text. Colors, paragraphs, and aligned stat tables are preserved;
-long tables scroll horizontally. Close, Escape, or a backdrop click dismisses
+grouped native facts, including combat statistics, abilities, resistances,
+feats and item properties. Full original output remains available in an
+expandable section. Close, Escape, or a backdrop click dismisses
 it. Consecutive results queue and disconnecting clears the queue.
 
 The proxy opts into `LORE_INFO` alongside Krynn web help reports. The read-only
@@ -18,3 +19,6 @@ This change applies to `lore`; other identification commands keep their behavior
 
 Both game server and browser proxy require rebuilding and restarting. No live
 services are restarted by this source change.
+
+See [Structured info MSDP](STRUCTURED_INFO_MSDP.md) for the current fields,
+score/who windows and preferred ammunition command.

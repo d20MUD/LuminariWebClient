@@ -2118,7 +2118,8 @@
 .room-entity-name { width: 100%; text-align: left; white-space: normal; }
 .room-entity-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem 0; }
 
-[aria-label="Sidebar sections"].tab-strip { grid-template-columns: repeat(auto-fit, minmax(6rem, 1fr)); }
+[aria-label="Sidebar sections"].tab-strip { display: flex; flex-wrap: nowrap; gap: 0.25rem; padding: 0.6rem 0.4rem 0; overflow-x: auto; }
+[aria-label="Sidebar sections"] .tab-button { flex: 1 0 auto; min-width: 0; padding: 0.4rem 0.25rem; font-size: 0.68rem; white-space: nowrap; }
 
 .character-creation-modal { width: calc(100vw - 2rem); max-width: none; box-sizing: border-box; }
 .creation-step-heading .modal-flow-text, .creation-choice-label .modal-flow-text { display: inline; margin: 0; line-height: inherit; }
@@ -2228,3 +2229,14 @@
 @media (max-width: 480px) { .creation-choice-list.creation-options-menu { grid-template-columns: minmax(0, 1fr); } }
 
 .character-creation-modal pre.creation-info-text { white-space: pre; overflow-wrap: normal; word-break: normal; overflow-x: auto; }
+
+.web-info-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr)); gap: 1rem; }
+.web-info-sections section { padding: 0.85rem; border: 1px solid var(--border); border-radius: 0.65rem; background: rgba(var(--surface-rgb), 0.4); }
+.web-info-sections h3 { margin: 0 0 0.65rem; color: var(--accent); font-size: 0.95rem; }
+.web-info-sections dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0.4rem 0.75rem; margin: 0; }
+.web-info-sections dt { color: var(--muted); }
+.web-info-sections dd { margin: 0; text-align: right; }
+.web-who-list { display: grid; gap: 0.6rem; padding: 0; list-style: none; }
+.web-who-list li { display: grid; gap: 0.3rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.6rem; }
+.web-who-list span { color: var(--muted); font-size: 0.85rem; }
+.web-info-original { margin-top: 1rem; }

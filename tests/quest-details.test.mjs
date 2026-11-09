@@ -360,3 +360,35 @@ test('race and class info preserve whitespace and decorative lines while parsing
   assert.match(html, /&lt;script&gt; &amp; text/)
   assert.doesNotMatch(html, /<script>|modal-flow-text/)
 })
+
+
+test('structured lore and score render native fields without parsing terminal text', () => {
+  const info = context.parseHelpInfo({ id: 'structured-1', topic: 'Test', body: 'Fallback only', fields: [
+    { section: 'Combat', label: 'Armor class', value: '17' },
+    { section: 'Combat', label: 'Unsafe', value: '<script>bad</script>' },
+    { section: 'Broken', label: 4, value: 'ignored' },
+  ] })
+  assert.equal(info.fields.length, 2)
+  const html = renderToStaticMarkup(context.StructuredInfo({ help: info }))
+  assert.match(html, /<h3>Combat<\/h3>/)
+  assert.match(html, /<dt>Armor class<\/dt><dd>17<\/dd>/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.doesNotMatch(html, /<script>|Broken/)
+  assert.match(html, /Full command output/)
+})
+
+test('who cards respect omitted anonymous fields and escape server names', () => {
+  const info = context.parseHelpInfo({ id: 'who-structured', topic: 'Who', body: '', players: [
+    { name: 'an unknown traveler', role: 'Player' },
+    { name: '<img src=x>', role: 'Player', level: 12, race: 'Human', faction: 'Adventurer', afk: true },
+    { name: 7 },
+  ] })
+  assert.equal(info.players.length, 2)
+  const html = renderToStaticMarkup(context.StructuredInfo({ help: info }))
+  assert.match(html, /2 visible players/)
+  assert.match(html, /an unknown traveler/)
+  assert.match(html, /Level 12/)
+  assert.match(html, /AFK/)
+  assert.doesNotMatch(html, /<img|Level undefined|Level 0/)
+  assert.match(html, /&lt;img/)
+})

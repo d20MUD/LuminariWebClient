@@ -20,7 +20,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value))
 
 test('window defaults migrate old settings and persist individual choices', () => {
   const defaults = plain(context.normalizeWindowPreferences(undefined))
-  assert.equal(Object.keys(defaults).length, 6)
+  assert.equal(Object.keys(defaults).length, 8)
   assert.ok(Object.values(defaults).every(Boolean))
   const settings = context.normalizeClientSettings({ terminal: {}, windows: { help: false, lore: false, questCompletion: false, questAcceptance: 'false' } })
   assert.equal(settings.windows.help, false)
@@ -37,8 +37,8 @@ test('Windows controls expose checked options and apply all on/off', () => {
   const onChange = (updates) => { preferences = { ...preferences, ...updates } }
   const controls = context.OutputWindowsControls({ windows: preferences, onChange })
   const html = renderToStaticMarkup(controls)
-  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 6)
-  assert.equal((html.match(/checked=""/g) ?? []).length, 6)
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 8)
+  assert.equal((html.match(/checked=""/g) ?? []).length, 8)
   assert.match(html, /Quest acceptance/)
   const actions = controls.props.children[1].props.children
   actions[1].props.onClick()
@@ -55,7 +55,7 @@ test('Windows controls expose checked options and apply all on/off', () => {
 const start = source.indexOf('        const acceptance = parseQuestAcceptance(message.state.questAccepted)')
 const routing = source.slice(start, source.indexOf('        setMudState(', start))
 function route(windows) {
-  const output = [], quests = [], lore = [], help = []
+  const output = [], quests = [], lore = [], help = [], info = []
   Object.assign(context, {
     message: { state: {
       questAccepted: { id: 'accepted', name: 'Quest', body: 'Instructions' },
@@ -66,14 +66,15 @@ function route(windows) {
     clientSettingsRef: { current: { windows } },
     lastQuestAcceptanceIdRef: { current: null }, lastQuestCompletionIdRef: { current: null },
     lastLoreResponseIdRef: { current: null }, lastHelpResponseIdRef: { current: null },
+    lastInfoIdsRef: { current: {} }, setInfoModals: (update) => { info.splice(0, info.length, ...update(info)) },
     setQuestNotifications: (update) => { quests.splice(0, quests.length, ...update(quests)) },
     setLoreModals: (update) => { lore.splice(0, lore.length, ...update(lore)) },
     setHelpModal: (value) => help.push(value), appendWindowOutput: (text) => output.push(text),
   })
-  vm.runInContext(`(() => {${routing}})()`, context)
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
   // Repeated state must not duplicate either modal or main-output content.
-  vm.runInContext(`(() => {${routing}})()`, context)
-  return { output, quests, lore, help }
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  return { output, quests, lore, help, info }
 }
 
 test('all off suppresses popups and restores captured help/lore to main output once', () => {
@@ -127,7 +128,7 @@ test('turning all off drains captured pending content and clears queued popups',
   let notifications = [{ kind: 'accepted', quest: {} }, { kind: 'complete', quest: {} }]
   const ref = { current: { windows: context.normalizeWindowPreferences(undefined), terminal: {} } }
   Object.assign(context, {
-    clientSettingsRef: ref, loreModals: lore, helpModal: help,
+    clientSettingsRef: ref, loreModals: lore, helpModal: help, infoModals: [], setInfoModals: () => {},
     appendWindowOutput: (text) => output.push(text),
     setLoreModals: (value) => { lore = value }, setHelpModal: (value) => { help = value },
     setQuestNotifications: (update) => { notifications = update(notifications) },
@@ -144,4 +145,20 @@ test('turning all off drains captured pending content and clears queued popups',
   assert.equal(help, null)
   assert.equal(notifications.length, 0)
   assert.ok(Object.values(ref.current.windows).every((enabled) => enabled === false))
+})
+
+
+test('score and who route once through Windows preferences', () => {
+  const enabled = route(context.normalizeWindowPreferences(undefined))
+  context.message.state.scoreInfo = { id: 'score-1', topic: 'Score', body: 'Score fallback', fields: [{ section: 'Resources', label: 'HP', value: '10 / 20' }] }
+  context.message.state.whoInfo = { id: 'who-1', topic: 'Who', body: 'Who fallback', players: [] }
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  assert.deepEqual(enabled.info.map((entry) => entry.kind), ['Score', 'Who'])
+  const disabled = route({ ...context.normalizeWindowPreferences(undefined), score: false, who: false })
+  context.message.state.scoreInfo = { id: 'score-2', topic: 'Score', body: 'Score fallback' }
+  context.message.state.whoInfo = { id: 'who-2', topic: 'Who', body: 'Who fallback' }
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  assert.equal(disabled.info.length, 0)
+  assert.match(disabled.output.join(' '), /Score fallback.*Who fallback/s)
 })

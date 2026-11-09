@@ -11,7 +11,7 @@ function extract(name) {
 }
 const context = vm.createContext({ starWarsMsdpVariableKeys: [], REQUIRED_MSDP_VARIABLES: [] })
 vm.runInContext(ts.transpile(['getConfiguredMsdpVariables', 'resolveMsdpVariableKey', 'mapMsdpUpdate'].map(extract).join('\n')), context)
-const variables = { characterCreation: 'CHARACTER_CREATION', roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
+const variables = { scoreInfo: 'SCORE_INFO', whoInfo: 'WHO_INFO', characterCreation: 'CHARACTER_CREATION', roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
 
 test('help MSDP reports require explicit per-MUD enablement', () => {
   assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('HELP_INFO'), false)
@@ -74,4 +74,14 @@ test('character creation is Krynn opt-in and preserves account-filtered choices'
   assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('CHARACTER_CREATION'), true)
   const payload = JSON.stringify({ id: 'create-1', active: true, step: 'race', choices: [{ value: 'human', label: 'Human' }] })
   assert.equal(context.mapMsdpUpdate('CHARACTER_CREATION', payload, variables).characterCreation, payload)
+})
+
+
+test('score and who use opt-in MSDP reports and retain native records through the proxy', () => {
+  for (const [key, variable] of [['scoreInfo', 'SCORE_INFO'], ['whoInfo', 'WHO_INFO']]) {
+    assert.equal(context.getConfiguredMsdpVariables(variables, false, false).includes(variable), false)
+    assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes(variable), true)
+    const payload = JSON.stringify({ id: variable, topic: key, body: 'Fallback', fields: [{ section: 'Native', label: 'Value', value: '42' }], players: [] })
+    assert.equal(context.mapMsdpUpdate(variable, payload, variables)[key], payload)
+  }
 })
