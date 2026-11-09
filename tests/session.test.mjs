@@ -225,3 +225,16 @@ test('account-menu handoff requires the prompt and cancels after manual takeover
   timer.callback()
   assert.deepEqual(sockets[0].writes.filter((write) => typeof write === 'string'), ['ExistingAccount\n', 'test-password\n', 'q\n'])
 })
+
+
+test('on-demand result commands renew reports before sending the game command', () => {
+  const { session, sockets } = fixture()
+  session.msdpInitialized = true
+  for (const [command, variable] of [['score', 'SCORE_INFO'], ['who', 'WHO_INFO'], ['lore guard', 'LORE_INFO']]) {
+    sockets[0].writes = []
+    session.sendInput(command)
+    assert.equal(sockets[0].writes.length, 2)
+    assert.deepEqual(sockets[0].writes[0], Buffer.concat([Buffer.from([255, 250, 69, 1]), Buffer.from('REPORT'), Buffer.from([2]), Buffer.from(variable), Buffer.from([255, 240])]))
+    assert.equal(sockets[0].writes[1], `${command}\n`)
+  }
+})

@@ -364,6 +364,16 @@ class MudSession {
       return
     }
 
+    // Renew on-demand subscriptions immediately before their command. The MUD
+    // can reset reports during copyover without closing the browser session.
+    if (this.msdpInitialized && this.helpModalsEnabled) {
+      const command = text.trim().split(/\s+/, 1)[0].toLowerCase()
+      const variable = command === 'score' || command === 'sc' ? this.msdpVariables.scoreInfo || 'SCORE_INFO'
+        : command === 'who' || command === 'wh' ? this.msdpVariables.whoInfo || 'WHO_INFO'
+        : command === 'lore' ? this.msdpVariables.loreInfo || 'LORE_INFO' : null
+      if (variable) this.sendMsdpPair('REPORT', variable)
+    }
+
     this.mudSocket.write(text.endsWith('\n') ? text : `${text}\n`)
 
     if (isMovementCommandInput(text)) {

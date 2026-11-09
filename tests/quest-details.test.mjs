@@ -230,8 +230,8 @@ test('lore results use a labeled modal with safe colors, prose and stat tables',
   assert.match(html, /Lore: sword &lt;script&gt;/)
   assert.match(html, /lore-details-title/)
   assert.match(html, /Close lore/)
-  assert.match(html, /class="modal-flow-text"/)
-  assert.doesNotMatch(html, /<pre/)
+  assert.match(html, /class="web-command-text"/)
+  assert.match(html, /Name: Sword<\/span>\nLevel: 5\n\nDamage/)
   assert.match(html, /Damage/)
   assert.match(html, /This lore response exceeded/)
   assert.doesNotMatch(html, /<script>|<img/)
@@ -366,15 +366,18 @@ test('structured lore and score render native fields without parsing terminal te
   const info = context.parseHelpInfo({ id: 'structured-1', topic: 'Test', body: 'Fallback only', fields: [
     { section: 'Combat', label: 'Armor class', value: '17' },
     { section: 'Combat', label: 'Unsafe', value: '<script>bad</script>' },
+    { section: 'Identity', label: '\tcAlignment\tn', value: '\tcNeutral \tWGood\tn' },
     { section: 'Broken', label: 4, value: 'ignored' },
   ] })
-  assert.equal(info.fields.length, 2)
+  assert.equal(info.fields.length, 3)
   const html = renderToStaticMarkup(context.StructuredInfo({ help: info }))
   assert.match(html, /<h3>Combat<\/h3>/)
   assert.match(html, /<dt>Armor class<\/dt><dd>17<\/dd>/)
   assert.match(html, /&lt;script&gt;/)
   assert.doesNotMatch(html, /<script>|Broken/)
   assert.match(html, /Full command output/)
+  assert.match(html, /<span style="color:[^"]+">Neutral <span style="color:[^"]+">Good<\/span>/)
+  assert.doesNotMatch(html, /cNeutral|cAlignment/)
 })
 
 test('who cards respect omitted anonymous fields and escape server names', () => {

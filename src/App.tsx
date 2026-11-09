@@ -1500,6 +1500,18 @@ function App() {
   }, [connected, proxyReady])
 
   useEffect(() => {
+    const hasOpenModal = () => Boolean(document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]'))
+    let modalWasOpen = hasOpenModal()
+    const observer = new MutationObserver(() => {
+      const modalIsOpen = hasOpenModal()
+      if (modalWasOpen && !modalIsOpen) focusCommandInput(commandInputRef.current)
+      modalWasOpen = modalIsOpen
+    })
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['open', 'role', 'aria-modal'] })
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     if (!connected) {
       return
     }
@@ -3614,11 +3626,11 @@ function App() {
               onClose={() => setQuestNotifications((current) => current.slice(1))} />
       ) : null}
 
-      {selectedMudId === 'krynn' && clientSettings.windows.lore && loreModals[0] ? (
+      {clientSettings.windows.lore && loreModals[0] ? (
         <HelpInfoModal key={loreModals[0].id} kind="Lore" help={loreModals[0]} onClose={() => setLoreModals((current) => current.slice(1))} />
       ) : null}
 
-      {selectedMudId === 'krynn' && infoModals[0] ? <HelpInfoModal key={infoModals[0].info.id} kind={infoModals[0].kind} help={infoModals[0].info} onClose={() => setInfoModals((current) => current.slice(1))} /> : null}
+      {infoModals[0] ? <HelpInfoModal key={infoModals[0].info.id} kind={infoModals[0].kind} help={infoModals[0].info} onClose={() => setInfoModals((current) => current.slice(1))} /> : null}
 
       {selectedMudPreset?.features?.helpModal && clientSettings.windows.help && helpModal ? (
         <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} />
@@ -6034,6 +6046,10 @@ function renderWebTextBlocks(body: string): ReactNode[] {
   return [<span key="text" className="modal-flow-text" dangerouslySetInnerHTML={{ __html: renderer.toHtml(reflowModalText(body)) }} />]
 }
 
+function renderCommandText(body: string): ReactNode {
+  return <pre className="web-command-text" dangerouslySetInnerHTML={{ __html: renderMudHtml(body) }} />
+}
+
 function StructuredInfo({ help }: { help: HelpInfo }) {
   const sections = [...new Set(help.fields?.map((field) => field.section) ?? [])]
   return <>
@@ -6050,16 +6066,16 @@ function StructuredInfo({ help }: { help: HelpInfo }) {
         <dd dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />
       </Fragment>)}</dl>
     </section>)}</div>
-    {help.body ? <details className="web-info-original" open={!help.fields?.length && !help.players?.length}><summary>Full command output</summary>{renderWebTextBlocks(help.body)}</details> : null}
+    {help.body ? <details className="web-info-original" open={!help.fields?.length && !help.players?.length}><summary>Full command output</summary>{renderCommandText(help.body)}</details> : null}
   </>
 }
 
 function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' }) {
   return (
-    <WebOutputModal title={help.topic ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
-      closeLabel={`Close ${kind.toLowerCase()}`} className="help-details-modal" onClose={onClose}>
+    <WebOutputModal title={help.topic && help.topic.trim().toLowerCase() !== kind.toLowerCase() ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
+      closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}`} onClose={onClose}>
       <article className="help-details-body">
-        {help.fields?.length || help.players ? <StructuredInfo help={help} /> : renderWebTextBlocks(help.body)}
+        {help.fields?.length || help.players ? <StructuredInfo help={help} /> : kind === 'Help' ? renderWebTextBlocks(help.body) : renderCommandText(help.body)}
       </article>
       {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}
     </WebOutputModal>
@@ -7915,7 +7931,7 @@ function hasExpandedSelection() {
 
 function focusCommandInput(input: HTMLInputElement | null) {
   requestAnimationFrame(() => {
-    if (!document.querySelector('dialog[open]')) input?.focus({ preventScroll: true })
+    if (!document.querySelector('dialog[open], [role="dialog"][aria-modal="true"]')) input?.focus({ preventScroll: true })
   })
 }
 

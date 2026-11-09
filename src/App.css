@@ -2240,3 +2240,13 @@
 .web-who-list li { display: grid; gap: 0.3rem; padding: 0.75rem; border: 1px solid var(--border); border-radius: 0.6rem; }
 .web-who-list span { color: var(--muted); font-size: 0.85rem; }
 .web-info-original { margin-top: 1rem; }
+
+/* Command results contain long feat names and prose as well as numeric stats. */
+.command-details-modal { width: min(76rem, calc(100vw - 2rem)); }
+.web-info-sections { grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr)); align-items: stretch; }
+.web-info-sections section { min-width: 0; }
+.web-info-sections dl { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 0; }
+.web-info-sections dt, .web-info-sections dd { min-width: 0; padding: 0.5rem 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; white-space: pre-wrap; }
+.web-info-sections dt { padding-right: 1rem; }
+.web-info-sections dd { text-align: left; font-variant-numeric: tabular-nums; }
+.web-command-text { margin: 0; max-width: 100%; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
