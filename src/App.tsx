@@ -6224,12 +6224,43 @@ function renderLinkedHelpText(help: HelpInfo, onNavigate?: (topic: string) => vo
   </>
 }
 
+// Remove empty display lines while retaining color resets between visible lines.
+function compactCommandText(body: string): string {
+  const lines: string[] = []
+  let pending = ''
+  for (const line of body.replace(/\r\n?/g, '\n').split('\n')) {
+    if (!stripMudFormatting(line).trim()) {
+      pending += line
+      continue
+    }
+    lines.push(pending + line)
+    pending = ''
+  }
+  return lines.length ? lines.join('\n') + pending : ''
+}
+
+function commandModalTitle(help: HelpInfo, kind: string): string {
+  const itemName = kind === 'Lore'
+    ? help.fields?.find((field) => field.section === 'Item' && field.label === 'Name' && stripMudFormatting(field.value).trim())?.value
+    : undefined
+  const topic = stripMudFormatting(itemName ?? help.topic ?? '').trim()
+  return topic && topic.toLowerCase() !== kind.toLowerCase() ? `${kind}: ${topic}` : kind
+}
+
 function HelpInfoModal({ help, onClose, onNavigate, kind = 'Help' }: { help: HelpInfo; onClose: () => void; onNavigate?: (topic: string) => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' | 'Loot' }) {
+  const compact = kind === 'Lore' || kind === 'Loot' || kind === 'Score'
+  const displayInfo = compact ? {
+    ...help,
+    body: compactCommandText(help.body),
+    fields: help.fields?.filter((field) => stripMudFormatting(field.value).trim()).map((field) => ({
+      ...field, value: compactCommandText(field.value),
+    })),
+  } : help
   return (
-    <WebOutputModal title={help.topic && help.topic.trim().toLowerCase() !== kind.toLowerCase() ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
-      closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}`} onClose={onClose}>
+    <WebOutputModal title={commandModalTitle(help, kind)} titleId={`${kind.toLowerCase()}-details-title`}
+      closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}${compact ? ` compact-command-modal ${kind.toLowerCase()}-details-modal` : ''}`} onClose={onClose}>
       <article className="help-details-body">
-        {help.fields?.length || help.players ? <StructuredInfo help={help} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(help.body)}
+        {displayInfo.fields?.length || displayInfo.players ? <StructuredInfo help={displayInfo} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(displayInfo.body)}
         {kind === 'Help' && (help.fields?.length || help.players) && help.seeAlso ? <HelpReferenceLinks references={help.seeAlso} onNavigate={onNavigate} /> : null}
       </article>
       {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}

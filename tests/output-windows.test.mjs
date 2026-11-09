@@ -285,3 +285,74 @@ test('help references reject malformed metadata and command separators, escaping
   assert.equal(legacy.seeAlso, undefined)
   assert.match(renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderLinkedHelpText(legacy))), /See Also: plain text/)
 })
+
+
+test('Lore titles use the resolved short description rather than command keywords', () => {
+  const info = { id: 'item-lore', topic: 'sword', body: '', fields: [
+    { section: 'Item', label: 'Keywords', value: 'sword short steel' },
+    { section: 'Item', label: 'Name', value: '\tRa black-handled steel short sword\tn' },
+  ] }
+  assert.equal(context.commandModalTitle(info, 'Lore'), 'Lore: a black-handled steel short sword')
+  assert.equal(context.commandModalTitle({ ...info, fields: [] }, 'Lore'), 'Lore: sword')
+  assert.equal(context.commandModalTitle({ ...info, topic: 'Lore', fields: [] }, 'Lore'), 'Lore')
+  const modal = context.HelpInfoModal({ help: info, kind: 'Lore', onClose() {} })
+  assert.equal(modal.props.title, 'Lore: a black-handled steel short sword')
+  assert.match(modal.props.className, /compact-command-modal lore-details-modal/)
+})
+
+test('Lore, loot and score remove blank rows and lines while preserving items and color resets', () => {
+  const info = { id: 'compact-loot', topic: 'Kill rewards', body: 'Reward\r\n\r\n  \r\n\tRRed\n\tn\nNext', fields: [
+    { section: 'Received items', label: 'Item', value: 'a short sword' },
+    { section: 'Received items', label: 'Item', value: 'a dagger' },
+    { section: 'Empty section', label: 'Empty', value: '  \n\tn\n' },
+    { section: 'Description', label: '', value: 'First line\n\nSecond line' },
+  ] }
+  for (const kind of ['Lore', 'Loot', 'Score']) {
+    const modal = context.HelpInfoModal({ help: info, kind, onClose() {} })
+    const article = modal.props.children[0]
+    const html = renderToStaticMarkup(article)
+    assert.match(modal.props.className, /compact-command-modal/)
+    assert.match(html, /a short sword/)
+    assert.match(html, /a dagger/)
+    assert.doesNotMatch(html, /Empty section|\n\n/)
+    assert.match(html, /First line\nSecond line/)
+    assert.equal(info.fields.length, 4)
+    assert.equal(info.fields[3].value, 'First line\n\nSecond line')
+  }
+  const compact = context.compactCommandText('\tRRed\n\tn\nNext\n\tn')
+  assert.equal(compact, '\tRRed\n\tnNext\tn')
+  assert.equal(context.compactCommandText('\n  \n\tn\n'), '')
+})
+
+test('Help and who preserve paragraph spacing and their standard modal layouts', () => {
+  const info = { id: 'normal-layout', topic: 'Score', body: 'First paragraph\n\nSecond paragraph', fields: [] }
+  for (const kind of ['Help', 'Who']) {
+    const modal = context.HelpInfoModal({ help: info, kind, onClose() {} })
+    assert.doesNotMatch(modal.props.className, /compact-command-modal/)
+    assert.match(renderToStaticMarkup(modal.props.children[0]), /First paragraph\n\nSecond paragraph/)
+  }
+})
+
+
+test('compact score preserves descriptions, zero resources and stat sections', () => {
+  const info = { id: 'score-compact', topic: 'Score', body: 'Name: Vertas\n\nHit points: 25 / 30', fields: [
+    { section: 'Identity', label: 'Name', value: 'Vertas' },
+    { section: 'Identity', label: 'Title', value: '  ' },
+    { section: 'Identity', label: 'Short description', value: 'a human' },
+    { section: 'Identity', label: 'Current short description', value: '\tWa wolf\tn' },
+    { section: 'Resources', label: 'Hit points', value: '25 / 30' },
+    { section: 'Resources', label: 'PSP', value: '0' },
+    { section: 'Abilities', label: 'Strength', value: '18' },
+  ] }
+  const modal = context.HelpInfoModal({ help: info, kind: 'Score', onClose() {} })
+  assert.match(modal.props.className, /compact-command-modal score-details-modal/)
+  const html = renderToStaticMarkup(modal.props.children[0])
+  assert.match(html, /Short description/)
+  assert.match(html, /Current short description/)
+  assert.match(html, /a human/)
+  assert.match(html, /a wolf/)
+  assert.match(html, /color:/)
+  assert.match(html, /PSP<\/dt><dd>0<\/dd>/)
+  assert.match(html, /Strength<\/dt><dd>18<\/dd>/)
+  assert.doesNotMatch(html, /Title|\n\n/)
+})
