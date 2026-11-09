@@ -11,7 +11,7 @@ const source = readFileSync(new URL('../src/App.tsx', import.meta.url), 'utf8')
 const ast = ts.createSourceFile('App.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 const functions = ast.statements.filter(ts.isFunctionDeclaration).map((node) => node.getText(ast).replace('export default ', '')).filter((text) => !text.includes('import.meta')).join('\n')
 const constants = ast.statements.filter(ts.isVariableStatement).map((node) => node.getText(ast)).filter((text) => !text.includes('import.meta')).join('\n')
-const context = vm.createContext({ React, AnsiToHtml,
+const context = vm.createContext({ React, Fragment: React.Fragment, AnsiToHtml,
   appSettings: { connection: { defaultHost: 'krynn.d20mud.com', defaultPort: 4300, muds: [{ id: 'krynn', host: 'krynn.d20mud.com', port: 4300 }] } },
   normalizeMsdpVariableMap: (value) => value, defaultMsdpVariables: {},
 })
@@ -20,7 +20,7 @@ const plain = (value) => JSON.parse(JSON.stringify(value))
 
 test('window defaults migrate old settings and persist individual choices', () => {
   const defaults = plain(context.normalizeWindowPreferences(undefined))
-  assert.equal(Object.keys(defaults).length, 8)
+  assert.equal(Object.keys(defaults).length, 9)
   assert.ok(Object.values(defaults).every(Boolean))
   const settings = context.normalizeClientSettings({ terminal: {}, windows: { help: false, lore: false, questCompletion: false, questAcceptance: 'false' } })
   assert.equal(settings.windows.help, false)
@@ -37,8 +37,8 @@ test('Windows controls expose checked options and apply all on/off', () => {
   const onChange = (updates) => { preferences = { ...preferences, ...updates } }
   const controls = context.OutputWindowsControls({ windows: preferences, onChange })
   const html = renderToStaticMarkup(controls)
-  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 8)
-  assert.equal((html.match(/checked=""/g) ?? []).length, 8)
+  assert.equal((html.match(/type="checkbox"/g) ?? []).length, 9)
+  assert.equal((html.match(/checked=""/g) ?? []).length, 9)
   assert.match(html, /Quest acceptance/)
   const actions = controls.props.children[1].props.children
   actions[1].props.onClick()
@@ -161,4 +161,92 @@ test('score and who route once through Windows preferences', () => {
   vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
   assert.equal(disabled.info.length, 0)
   assert.match(disabled.output.join(' '), /Score fallback.*Who fallback/s)
+})
+
+
+test('loot events queue once and disabled loot prints native fields', () => {
+  const result = route(context.normalizeWindowPreferences(undefined))
+  context.message.state.lootInfo = { id: 'loot-1', topic: 'Corpse loot', body: '', fields: [{ section: 'On corpse', label: 'Item', value: 'a sword' }] }
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  assert.deepEqual(result.info.map((entry) => entry.kind), ['Loot'])
+  const disabled = route({ ...context.normalizeWindowPreferences(undefined), loot: false })
+  context.message.state.lootInfo = { id: 'loot-2', topic: 'Corpse loot', body: '', fields: [{ section: 'On corpse', label: 'Item', value: 'a sword' }] }
+  vm.runInContext(ts.transpile(`(() => {${routing}})()`), context)
+  assert.equal(disabled.info.length, 0)
+  assert.match(disabled.output.join(' '), /On corpse.*a sword/)
+})
+
+
+test('captured score and who output retains colors in the main terminal', () => {
+  for (const body of [
+    '\tcAlignment: \tn\tcNeutral \tWGood\tn\r\n',
+    '\tYPlayers online\tn\r\n\tCVertas\tn',
+    '^RQuest complete^n\n\n^GReward^n',
+    String.raw`\tRHelp, lore, loot and creation text\tn`,
+    '\t[f123]Extended color\tn',
+  ]) {
+    const text = context.normalizeCapturedOutputText(body)
+    assert.match(text, /\x1b\[/)
+    const html = new AnsiToHtml({ escapeXML: true }).toHtml(text)
+    assert.match(html, /style="color:/)
+    assert.doesNotMatch(html, /\t[cCYRWn]|\\t[Rn]|\^R|\^n|\^G/)
+  }
+  const alignment = new AnsiToHtml().toHtml(context.normalizeCapturedOutputText('\tcNeutral \tWGood\tn'))
+  assert.match(alignment, />Neutral /)
+  assert.doesNotMatch(alignment, /cNeutral/)
+  const ansi = '\x1b[31mAlready converted\x1b[0m\r\nLiteral ^caret'
+  assert.equal(context.normalizeTerminalText(ansi), ansi.replace('\r\n', '\n'))
+  assert.equal(context.normalizeCapturedOutputText('a\n\nb'), 'a\n\nb')
+})
+
+test('the actual captured-output append path renders colored score and who text', () => {
+  let terminal = ''
+  Object.assign(context, {
+    useCallback: (callback) => callback,
+    terminalScrollRef: { current: { isFollowing: () => true } },
+    terminalHistoryLineLimitRef: { current: 100 },
+    setHasUnreadTerminalOutput() {},
+    setTerminalOutput: (update) => { terminal = update(terminal) },
+  })
+  const start = source.indexOf('  const appendWindowOutput = useCallback(')
+  const end = source.indexOf('  const rememberCommand', start)
+  const append = vm.runInContext(ts.transpile(`(() => {${source.slice(start, end)}\nreturn appendWindowOutput})()`), context)
+  append(context.formatTextWindowOutput({ topic: 'Score', body: '\tcNeutral \tWGood\tn', truncated: false }, 'Score'))
+  append(context.formatTextWindowOutput({ topic: 'Who', body: '\tCVertas\tn', truncated: false }, 'Who'))
+  assert.match(terminal, /\x1b\[/)
+  assert.doesNotMatch(terminal, /\t[cCWn]/)
+  const html = new AnsiToHtml({ escapeXML: true }).toHtml(terminal)
+  assert.match(html, /style="color:/)
+  assert.match(html, />Neutral /)
+  assert.match(html, />Vertas/)
+})
+
+test('Who displays staff titles with colors and active happy-hour bonuses', () => {
+  const info = context.parseHelpInfo({ id: 'who-details', topic: 'Who is online', body: '',
+    players: [{ name: 'Gicker', role: 'Staff', staffTitle: '\tCCaretaker\tn' },
+      { name: 'Vertas', role: 'Player', level: 2 }],
+    fields: [{ section: 'Happy hour', label: 'Time remaining', value: '0h 30m 0s' },
+      { section: 'Happy hour', label: 'Experience', value: '+50%' }],
+  })
+  assert.equal(info.players[0].staffTitle, '\tCCaretaker\tn')
+  const html = renderToStaticMarkup(context.StructuredInfo({ help: info }))
+  assert.match(html, /Staff &#xB7; .*Caretaker/)
+  assert.match(html, /color:/)
+  assert.doesNotMatch(html, /\tC/)
+  assert.match(html, /Happy hour/)
+  assert.match(html, /Time remaining/)
+  assert.match(html, /0h 30m 0s/)
+  assert.match(html, /Experience/)
+  assert.match(html, /\+50%/)
+})
+
+test('Who remains compatible with older responses and ignores malformed titles', () => {
+  const info = context.parseHelpInfo({ id: 'old-who', body: '',
+    players: [{ name: 'Staff member', role: 'Staff', staffTitle: 42 }],
+  })
+  assert.equal(info.players[0].staffTitle, undefined)
+  const html = renderToStaticMarkup(context.StructuredInfo({ help: info }))
+  assert.match(html, /Staff member/)
+  assert.doesNotMatch(html, /Happy hour|undefined|42/)
 })

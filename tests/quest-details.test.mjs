@@ -395,3 +395,48 @@ test('who cards respect omitted anonymous fields and escape server names', () =>
   assert.doesNotMatch(html, /<img|Level undefined|Level 0/)
   assert.match(html, /&lt;img/)
 })
+
+test('dialogue quest result popups show native skill, roll, DC and outcome', () => {
+  const dialogueCheck = { skill: 'diplomacy', roll: 6, modifier: -1, total: 5, dc: 15, success: false }
+  const acceptance = context.parseQuestAcceptance(JSON.stringify({ id: 'failed-check', name: 'Dockmaster', body: 'Go kill 10 wharf rats.', commands: [], dialogueCheck }))
+  const failed = renderToStaticMarkup(context.QuestAcceptanceModal({ acceptance, onClose() {} }))
+  assert.match(failed, /Dialogue quest result/)
+  assert.match(failed, /Failed/)
+  assert.match(failed, /diplomacy/)
+  assert.match(failed, /6.*−.*1.*5/s)
+  assert.match(failed, /<dt>DC<\/dt><dd>15<\/dd>/)
+  assert.match(failed, /Go kill 10 wharf rats/)
+  for (const skill of ['diplomacy', 'intimidate', 'bluff']) {
+    const completion = context.parseQuestCompletion({ id: skill, name: 'Dialogue quest', body: 'Well done.', rewards: {}, dialogueCheck: { skill, roll: 12, modifier: 3, total: 15, dc: 15, success: true } })
+    const html = renderToStaticMarkup(context.QuestCompletionModal({ completion, onClose() {} }))
+    assert.match(html, /Success/)
+    assert.ok(html.includes(skill))
+    assert.match(html, /12.*\+.*3.*15/s)
+  }
+  assert.equal(context.parseDialogueQuestCheck({ ...dialogueCheck, roll: '6' }), undefined)
+  assert.equal(context.parseDialogueQuestCheck(undefined), undefined)
+})
+
+test('feat help keeps labeled fields separate and wraps only their own text', () => {
+  const body = '\tcFeat    : \tnmanyshot\n\tcType    : \tncombat feat\n----------------------\n\tcPrerequisites : \tnBAB +6, rapid shot, point blank shot,\n Dex : 17\n\tcDescription : \tnThe first bow attack in a full attack fires\n two arrows using one attack roll.\n\tcPrerequisite For \tn: epic manyshot\n\tcObtained by Class \tn: ranger (lvl 12)\n\tcClass Feat for \tn: warrior, eldritch knight,\n spellsword, knight of solamnia, knight of the lily'
+  const text = context.reflowModalText(body).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+  assert.match(text, /manyshot\nType/)
+  assert.match(text, /Dex : 17\nDescription/)
+  assert.match(text, /fires two arrows using one attack roll\.\nPrerequisite For/)
+  assert.match(text, /epic manyshot\nObtained by Class/)
+  assert.match(text, /ranger \(lvl 12\)\nClass Feat for/)
+  const help = context.parseHelpInfo({ id: 'feat-native', topic: 'manyshot', body, fields: [
+    { section: 'Feat', label: 'Name', value: 'manyshot' },
+    { section: 'Prerequisites', label: 'BAB +6', value: '\trNot met\tn' },
+    { section: 'Description', label: '', value: 'Two arrows using one attack roll.' },
+    { section: 'Obtained by class', label: 'ranger', value: 'Level 12' },
+    { section: 'Class feat for', label: '', value: 'warrior' },
+  ] })
+  const html = renderToStaticMarkup(context.HelpInfoModal({ help, onClose() {} }))
+  assert.match(html, /web-info-description/)
+  assert.match(html, /<h3>Prerequisites<\/h3>/)
+  assert.match(html, /web-info-prose/)
+  assert.match(html, /Not met/)
+  assert.match(html, /style="color:/)
+  assert.match(html, /Level 12/)
+})

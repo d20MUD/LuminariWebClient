@@ -2250,3 +2250,12 @@
 .web-info-sections dt { padding-right: 1rem; }
 .web-info-sections dd { text-align: left; font-variant-numeric: tabular-nums; }
 .web-command-text { margin: 0; max-width: 100%; min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; line-height: 1.6; }
+
+.quest-dialogue-check { margin: 1rem 0; padding: 0.85rem; border: 1px solid var(--border); border-radius: 0.65rem; }
+.quest-dialogue-check h3 { margin: 0 0 0.6rem; }
+.dialogue-check-success { color: #8dd3a2; }
+.dialogue-check-failure { color: #f19898; }
+
+.web-info-description { grid-column: 1 / -1; }
+.web-info-empty-label { display: none; }
+.web-info-prose { grid-column: 1 / -1; }

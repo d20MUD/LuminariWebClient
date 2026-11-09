@@ -36,3 +36,27 @@ empty/incompatible preferred bundle cannot stop the player using compatible
 ammo. Selection moves the chosen bundle to the head by relinking containment
 entries, preserving weight and quantity. Fire, reload, autofire and subsequent
 combat shots share this selection path.
+
+## Colors in the main output
+
+Captured MSDP bodies retain original tab/caret color markup. When a window is
+turned off, or a pending modal is moved back to main output, appendWindowOutput
+converts that markup to ANSI before joining the terminal stream. The same path
+covers score, who, lore, help, loot, quest detail/list text, and creation text.
+Raw ANSI arriving from the game keeps its existing path and is not decoded a
+second time. Modal rendering continues to decode its own independent values.
+
+Server audit: ordinary vwrite_to_output still calls ProtocolOutput; capture
+intercepts only opted-in structured reports. No score/who text colors were
+removed. The gateway's login-format stripping only touches its private login
+matching buffer. Plain MSDP labels/maps use copied buffers, preserving game
+text and shared name strings. Native player color preferences remain in force.
+
+Who player entries may include `staffTitle`, using the staff character's
+custom staff title with its MUD color codes. It is omitted for mortals and
+anonymous identities. The client renders it alongside the Staff label.
+Active happy hours add `fields` under the `Happy hour` section, with remaining
+time and each positive bonus (including crafting/harvesting-only events).
+An inactive or expired happy hour adds no section. These additions use the
+existing WHO_INFO payload and field renderer; older clients retain the full
+command output fallback.

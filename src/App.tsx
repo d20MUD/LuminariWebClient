@@ -256,6 +256,7 @@ const OUTPUT_WINDOWS = [
   { id: 'lore', label: 'Lore' },
   { id: 'score', label: 'Score' },
   { id: 'who', label: 'Who' },
+  { id: 'loot', label: 'Loot drops' },
   { id: 'questAcceptance', label: 'Quest acceptance' },
   { id: 'questCompletion', label: 'Quest completion' },
   { id: 'availableQuests', label: 'Available quests' },
@@ -264,7 +265,7 @@ const OUTPUT_WINDOWS = [
 
 type OutputWindowId = (typeof OUTPUT_WINDOWS)[number]['id']
 type WindowPreferences = Record<OutputWindowId, boolean>
-const DEFAULT_WINDOW_PREFERENCES: WindowPreferences = { help: true, lore: true, score: true, who: true, questAcceptance: true, questCompletion: true, availableQuests: true, questDetails: true }
+const DEFAULT_WINDOW_PREFERENCES: WindowPreferences = { help: true, lore: true, score: true, who: true, loot: true, questAcceptance: true, questCompletion: true, availableQuests: true, questDetails: true }
 
 function OutputWindowsControls({ windows, onChange }: { windows: WindowPreferences; onChange: (updates: Partial<WindowPreferences>) => void }) {
   return <>
@@ -693,7 +694,7 @@ function App() {
   const [questNotifications, setQuestNotifications] = useState<QuestNotification[]>([])
   const lastQuestAcceptanceIdRef = useRef<string | null>(null)
   const lastQuestCompletionIdRef = useRef<string | null>(null)
-  const [infoModals, setInfoModals] = useState<{ kind: 'Score' | 'Who'; info: HelpInfo }[]>([])
+  const [infoModals, setInfoModals] = useState<{ kind: 'Score' | 'Who' | 'Loot'; info: HelpInfo }[]>([])
   const lastInfoIdsRef = useRef<Record<string, string>>({})
   const [loreModals, setLoreModals] = useState<HelpInfo[]>([])
   const lastLoreResponseIdRef = useRef<string | null>(null)
@@ -892,7 +893,7 @@ function App() {
   const appendWindowOutput = useCallback((text: string) => {
     if (!terminalScrollRef.current?.isFollowing()) setHasUnreadTerminalOutput(true)
     setTerminalOutput((current) => trimTerminalOutputLines(
-      `${current}\n${normalizeTerminalText(text)}\n`, terminalHistoryLineLimitRef.current,
+      `${current}\n${normalizeCapturedOutputText(text)}\n`, terminalHistoryLineLimitRef.current,
     ))
   }, [])
 
@@ -1106,7 +1107,7 @@ function App() {
           lastQuestCompletionIdRef.current = completion.id
           if (clientSettingsRef.current.windows.questCompletion) setQuestNotifications((current) => [...current, { kind: 'complete', quest: completion }])
         }
-        for (const [key, kind, value] of [['score', 'Score', message.state.scoreInfo], ['who', 'Who', message.state.whoInfo]] as const) {
+        for (const [key, kind, value] of [['score', 'Score', message.state.scoreInfo], ['who', 'Who', message.state.whoInfo], ['loot', 'Loot', message.state.lootInfo]] as const) {
           const info = parseHelpInfo(value)
           if (info && info.id !== lastInfoIdsRef.current[key]) {
             lastInfoIdsRef.current[key] = info.id
@@ -1766,19 +1767,18 @@ function App() {
       }
 
       event.preventDefault()
-
-      if (historyIndex === null) {
-        setHistoryDraft(command)
-        setHistoryIndex(commandHistory.length - 1)
-        setCommand(commandHistory[commandHistory.length - 1])
-        return
+      // Keep the original typed prefix while stepping through matching entries.
+      const draft = historyIndex === null ? command : historyDraft
+      const prefix = draft.trim().toLowerCase()
+      const start = historyIndex === null ? commandHistory.length : historyIndex
+      for (let index = start - 1; index >= 0; index--) {
+        if (commandHistory[index].trim().toLowerCase().startsWith(prefix)) {
+          if (historyIndex === null) setHistoryDraft(draft)
+          setHistoryIndex(index)
+          setCommand(commandHistory[index])
+          break
+        }
       }
-
-      if (historyIndex > 0) {
-        setHistoryIndex(historyIndex - 1)
-        setCommand(commandHistory[historyIndex - 1])
-      }
-
       return
     }
 
@@ -1787,11 +1787,13 @@ function App() {
     }
 
     event.preventDefault()
-
-    if (historyIndex < commandHistory.length - 1) {
-      setHistoryIndex(historyIndex + 1)
-      setCommand(commandHistory[historyIndex + 1])
-      return
+    const prefix = historyDraft.trim().toLowerCase()
+    for (let index = historyIndex + 1; index < commandHistory.length; index++) {
+      if (commandHistory[index].trim().toLowerCase().startsWith(prefix)) {
+        setHistoryIndex(index)
+        setCommand(commandHistory[index])
+        return
+      }
     }
 
     setHistoryIndex(null)
@@ -1836,8 +1838,8 @@ function App() {
       loreModals.forEach((lore) => appendWindowOutput(formatTextWindowOutput(lore, 'Lore')))
       setLoreModals([])
     }
-    infoModals.filter(({ kind }) => !windows[kind === 'Score' ? 'score' : 'who']).forEach(({ info, kind }) => appendWindowOutput(formatTextWindowOutput(info, kind)))
-    setInfoModals((current) => current.filter(({ kind }) => windows[kind === 'Score' ? 'score' : 'who']))
+    infoModals.filter(({ kind }) => !windows[kind === 'Score' ? 'score' : kind === 'Who' ? 'who' : 'loot']).forEach(({ info, kind }) => appendWindowOutput(formatTextWindowOutput(info, kind)))
+    setInfoModals((current) => current.filter(({ kind }) => windows[kind === 'Score' ? 'score' : kind === 'Who' ? 'who' : 'loot']))
     setQuestNotifications((current) => current.filter((notice) => windows[notice.kind === 'accepted' ? 'questAcceptance' : 'questCompletion']))
     const next = { ...clientSettingsRef.current, windows }
     clientSettingsRef.current = next
@@ -4781,6 +4783,12 @@ function clampGaugeWidthPixels(value: number | undefined, fallback = DEFAULT_LAY
   return Math.max(120, Math.min(960, Math.trunc(value)))
 }
 
+// MSDP captures retain raw MUD markup. Decode it before joining the ANSI
+// terminal stream, just as ProtocolOutput does for ordinary game output.
+function normalizeCapturedOutputText(value: string) {
+  return normalizeTerminalText(convertLuminariColorCodes(value))
+}
+
 function normalizeTerminalText(value: string) {
   return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
 }
@@ -5911,22 +5919,44 @@ function RoomQuestNotice({ value, currentRoom, connected, onJoin, modalEnabled =
   )
 }
 
-type QuestAcceptance = { id: string; name: string; body: string; time?: number; commands: string[] }
+type DialogueQuestCheck = { skill: string; roll: number; modifier: number; total: number; dc: number; success: boolean }
+
+function parseDialogueQuestCheck(value: MudValue | undefined): DialogueQuestCheck | undefined {
+  if (!isMudRecord(value) || typeof value.skill !== 'string' || typeof value.success !== 'boolean') return undefined
+  if (![value.roll, value.modifier, value.total, value.dc].every((number) => typeof number === 'number' && Number.isFinite(number))) return undefined
+  return { skill: value.skill, roll: value.roll as number, modifier: value.modifier as number,
+    total: value.total as number, dc: value.dc as number, success: value.success }
+}
+
+function DialogueQuestCheckSummary({ check }: { check?: DialogueQuestCheck }) {
+  if (!check) return null
+  return <section className="quest-dialogue-check" aria-label="Dialogue skill check">
+    <h3>Dialogue check: <span className={check.success ? 'dialogue-check-success' : 'dialogue-check-failure'}>{check.success ? 'Success' : 'Failed'}</span></h3>
+    <dl className="quest-details-facts">
+      <dt>Skill</dt><dd>{check.skill}</dd>
+      <dt>Roll</dt><dd>{check.roll} {check.modifier < 0 ? '−' : '+'} {Math.abs(check.modifier)} = {check.total}</dd>
+      <dt>DC</dt><dd>{check.dc}</dd>
+    </dl>
+  </section>
+}
+
+type QuestAcceptance = { id: string; name: string; body: string; time?: number; commands: string[]; dialogueCheck?: DialogueQuestCheck }
 type QuestNotification = { kind: 'accepted'; quest: QuestAcceptance } | { kind: 'complete'; quest: QuestCompletion }
 
 function parseQuestAcceptance(value: MudValue | undefined): QuestAcceptance | null {
   if (value === undefined) return null
   const parsed = normalizeQuestValue(value)
   if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.name !== 'string' || typeof parsed.body !== 'string') return null
-  return { id: parsed.id, name: parsed.name, body: parsed.body,
+  return { id: parsed.id, name: parsed.name, body: parsed.body, dialogueCheck: parseDialogueQuestCheck(parsed.dialogueCheck),
     time: typeof parsed.time === 'number' && Number.isFinite(parsed.time) ? parsed.time : undefined,
     commands: Array.isArray(parsed.commands) ? parsed.commands.filter((command): command is string => typeof command === 'string') : [] }
 }
 
 function QuestAcceptanceModal({ acceptance, onClose }: { acceptance: QuestAcceptance; onClose: () => void }) {
   return (
-    <WebOutputModal title="Quest accepted!" titleId="quest-acceptance-title" closeLabel="Close quest acceptance" onClose={onClose}>
+    <WebOutputModal title={acceptance.dialogueCheck ? 'Dialogue quest result' : 'Quest accepted!'} titleId="quest-acceptance-title" closeLabel="Close quest acceptance" onClose={onClose}>
       <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(acceptance.name) }} />
+      <DialogueQuestCheckSummary check={acceptance.dialogueCheck} />
       <article className="help-details-body">
         {renderWebTextBlocks(acceptance.body)}
       </article>
@@ -5936,7 +5966,7 @@ function QuestAcceptanceModal({ acceptance, onClose }: { acceptance: QuestAccept
   )
 }
 
-type QuestCompletion = { id: string; name: string; body: string; rewards: Record<string, string | number> }
+type QuestCompletion = { id: string; name: string; body: string; rewards: Record<string, string | number>; dialogueCheck?: DialogueQuestCheck }
 
 function parseQuestCompletion(value: MudValue | undefined): QuestCompletion | null {
   if (value === undefined) return null
@@ -5944,13 +5974,14 @@ function parseQuestCompletion(value: MudValue | undefined): QuestCompletion | nu
   if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.name !== 'string' || typeof parsed.body !== 'string' || !isMudRecord(parsed.rewards)) return null
   const rewards = Object.fromEntries(Object.entries(parsed.rewards).filter((entry): entry is [string, string | number] =>
     typeof entry[1] === 'string' || (typeof entry[1] === 'number' && Number.isFinite(entry[1]))))
-  return { id: parsed.id, name: parsed.name, body: parsed.body, rewards }
+  return { id: parsed.id, name: parsed.name, body: parsed.body, rewards, dialogueCheck: parseDialogueQuestCheck(parsed.dialogueCheck) }
 }
 
 function QuestCompletionModal({ completion, onClose }: { completion: QuestCompletion; onClose: () => void }) {
   return (
     <WebOutputModal title="Quest complete!" titleId="quest-completion-title" closeLabel="Close quest completion" onClose={onClose}>
       <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(completion.name) }} />
+      <DialogueQuestCheckSummary check={completion.dialogueCheck} />
       <article className="help-details-body">
         {renderWebTextBlocks(completion.body)}
       </article>
@@ -5967,7 +5998,7 @@ function QuestCompletionModal({ completion, onClose }: { completion: QuestComple
 }
 
 function formatTextWindowOutput(info: HelpInfo, kind: string): string {
-  return `${kind}${info.topic ? `: ${info.topic}` : ''}\n\n${info.body}${info.truncated ? '\n[Response shortened to the display limit.]' : ''}`
+  return `${kind}${info.topic ? `: ${info.topic}` : ''}\n\n${info.body || info.fields?.map((field) => `${field.section} — ${field.label}: ${field.value}`).join('\n') || ''}${info.truncated ? '\n[Response shortened to the display limit.]' : ''}`
 }
 
 function formatQuestDetailsOutput(quest: QuestEntry): string {
@@ -5986,7 +6017,7 @@ function formatAvailableQuestsOutput(available: RoomQuests): string {
 }
 
 type InfoField = { section: string; label: string; value: string }
-type InfoPlayer = { name: string; role: string; level?: number; race?: string; faction?: string; afk?: boolean; roleplay?: boolean }
+type InfoPlayer = { name: string; role: string; staffTitle?: string; level?: number; race?: string; faction?: string; afk?: boolean; roleplay?: boolean }
 type HelpInfo = { id: string; topic: string; body: string; truncated: boolean; fields?: InfoField[]; players?: InfoPlayer[] }
 
 function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
@@ -5998,6 +6029,7 @@ function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
   const players = Array.isArray(parsed.players) ? parsed.players.flatMap((player): InfoPlayer[] => {
     if (!isMudRecord(player) || typeof player.name !== 'string' || typeof player.role !== 'string') return []
     return [{ name: player.name, role: player.role,
+      ...(typeof player.staffTitle === 'string' ? { staffTitle: player.staffTitle } : {}),
       ...(typeof player.level === 'number' ? { level: player.level } : {}),
       ...(typeof player.race === 'string' ? { race: player.race } : {}),
       ...(typeof player.faction === 'string' ? { faction: player.faction } : {}),
@@ -6015,6 +6047,9 @@ function reflowModalText(body: string): string {
   // Keep list items separate, including the creator's "Ability: - bonus"
   // format. Wrapped continuation lines still flow with their own item.
   const startsListItem = (line: string) => /^(?:[-*•]\s+|\d+[.)]\s+|[^:]+:\s*-\s+)/.test(plainLine(line))
+  // Legacy feat reports contain wrapped field values, not one prose block.
+  const startsFeatField = (line: string) => /^(?:Feat|Type|Prerequisites|Description|Prerequisite For|Obtained by Races|Obtained by Class|Class Feat for)\s*:/i.test(plainLine(line))
+  const isFeatHelp = lines.some((line) => /^Feat\s*:/i.test(plainLine(line)))
   const isHeading = (line: string) => /:\s*$/.test(plainLine(line))
   let abilityList = false
   let racialAbilities = false
@@ -6032,7 +6067,7 @@ function reflowModalText(body: string): string {
     const trimmed = line.replace(/^[ \t]+|[ \t]+$/g, '')
     const text = racialAbilities ? trimmed.replace(/[ \t]+/g, ' ') : trimmed
     if (index === lines.length - 1) return text
-    return text + (!isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
+    return text + (!isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !(isFeatHelp && startsFeatField(lines[index + 1])) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
   }).join('')
 }
 
@@ -6057,20 +6092,20 @@ function StructuredInfo({ help }: { help: HelpInfo }) {
       <p>{help.players.length} visible {help.players.length === 1 ? 'player' : 'players'}</p>
       <ul className="web-who-list">{help.players.map((player, index) => <li key={index}>
         <strong dangerouslySetInnerHTML={{ __html: renderMudHtml(player.name) }} />
-        <span dangerouslySetInnerHTML={{ __html: renderMudHtml([player.role, player.level !== undefined ? `Level ${player.level}` : '', player.race, player.faction, player.afk ? 'AFK' : '', player.roleplay ? 'RP' : ''].filter(Boolean).join(' · ')) }} />
+        <span dangerouslySetInnerHTML={{ __html: renderMudHtml([player.role, player.staffTitle, player.level !== undefined ? `Level ${player.level}` : '', player.race, player.faction, player.afk ? 'AFK' : '', player.roleplay ? 'RP' : ''].filter(Boolean).join(' · ')) }} />
       </li>)}</ul>
     </section> : null}
-    <div className="web-info-sections">{sections.map((section) => <section key={section}>
+    <div className="web-info-sections">{sections.map((section) => <section key={section} className={section === 'Description' ? 'web-info-description' : undefined}>
       <h3>{section}</h3><dl>{help.fields?.filter((field) => field.section === section).map((field, index) => <Fragment key={index}>
-        <dt dangerouslySetInnerHTML={{ __html: renderMudHtml(field.label) }} />
-        <dd dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />
+        <dt className={!field.label ? 'web-info-empty-label' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.label) }} />
+        <dd className={!field.label ? 'web-info-prose' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />
       </Fragment>)}</dl>
     </section>)}</div>
     {help.body ? <details className="web-info-original" open={!help.fields?.length && !help.players?.length}><summary>Full command output</summary>{renderCommandText(help.body)}</details> : null}
   </>
 }
 
-function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' }) {
+function HelpInfoModal({ help, onClose, kind = 'Help' }: { help: HelpInfo; onClose: () => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' | 'Loot' }) {
   return (
     <WebOutputModal title={help.topic && help.topic.trim().toLowerCase() !== kind.toLowerCase() ? `${kind}: ${help.topic}` : kind} titleId={`${kind.toLowerCase()}-details-title`}
       closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}`} onClose={onClose}>

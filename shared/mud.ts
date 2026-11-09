@@ -101,6 +101,7 @@ export interface MudState {
   questComplete?: MudValue
   scoreInfo?: MudValue
   whoInfo?: MudValue
+  lootInfo?: MudValue
   loreInfo?: MudValue
   helpInfo?: MudValue
   questInfo?: MudValue
@@ -171,6 +172,7 @@ export const defaultMsdpVariables = {
   questComplete: 'QUEST_COMPLETE',
   scoreInfo: 'SCORE_INFO',
   whoInfo: 'WHO_INFO',
+  lootInfo: 'LOOT_INFO',
   loreInfo: 'LORE_INFO',
   helpInfo: 'HELP_INFO',
   questInfo: 'QUEST_INFO',
@@ -298,6 +300,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     questComplete: normalizeMsdpVariableValue(raw.questComplete, defaultMsdpVariables.questComplete),
     scoreInfo: normalizeMsdpVariableValue(raw.scoreInfo, defaultMsdpVariables.scoreInfo),
     whoInfo: normalizeMsdpVariableValue(raw.whoInfo, defaultMsdpVariables.whoInfo),
+    lootInfo: normalizeMsdpVariableValue(raw.lootInfo, defaultMsdpVariables.lootInfo),
     loreInfo: normalizeMsdpVariableValue(raw.loreInfo, defaultMsdpVariables.loreInfo),
     helpInfo: normalizeMsdpVariableValue(raw.helpInfo, defaultMsdpVariables.helpInfo),
     questInfo: normalizeMsdpVariableValue(raw.questInfo, defaultMsdpVariables.questInfo),
