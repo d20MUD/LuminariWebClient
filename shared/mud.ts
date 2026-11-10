@@ -96,6 +96,7 @@ export interface MudState {
   group?: MudValue
   characterCreation?: MudValue
   roomContents?: MudValue
+  ammoStatus?: MudValue
   roomQuests?: MudValue
   questAccepted?: MudValue
   questHistory?: MudValue
@@ -168,6 +169,7 @@ export const defaultMsdpVariables = {
   group: 'GROUP',
   characterCreation: 'CHARACTER_CREATION',
   roomContents: 'ROOM_CONTENTS',
+  ammoStatus: 'AMMO_STATUS',
   roomQuests: 'ROOM_QUESTS',
   questAccepted: 'QUEST_ACCEPTED',
   questHistory: 'QUEST_HISTORY',
@@ -297,6 +299,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     group: normalizeMsdpVariableValue(raw.group, defaultMsdpVariables.group),
     characterCreation: normalizeMsdpVariableValue(raw.characterCreation, defaultMsdpVariables.characterCreation),
     roomContents: normalizeMsdpVariableValue(raw.roomContents, defaultMsdpVariables.roomContents),
+    ammoStatus: normalizeMsdpVariableValue(raw.ammoStatus, defaultMsdpVariables.ammoStatus),
     roomQuests: normalizeMsdpVariableValue(raw.roomQuests, defaultMsdpVariables.roomQuests),
     questAccepted: normalizeMsdpVariableValue(raw.questAccepted, defaultMsdpVariables.questAccepted),
     questHistory: normalizeMsdpVariableValue(raw.questHistory, defaultMsdpVariables.questHistory),

@@ -3671,6 +3671,7 @@ function App() {
           {isMinimalistMode || bars.length === 0 ? null : (
             <>
               {isStarWarsConnection ? <StarWarsResourceInfo mudState={mudState} /> : null}
+              {selectedMudId === 'krynn' && connected ? <KrynnAmmoStatus value={mudState.ammoStatus} /> : null}
               <div className="bars">
                 {bars.map((bar) => (
                   <StatusBar key={bar.id} bar={bar} />
@@ -5962,6 +5963,20 @@ function RoomContentsPanel({ value, currentRoom, connected, onAction }: {
       </section>
     })}
   </div>
+}
+
+function KrynnAmmoStatus({ value }: { value: MudValue | undefined }) {
+  if (value === undefined) return null
+  const status = normalizeQuestValue(value)
+  if (!isMudRecord(status) || status.ranged !== true) return null
+  let text: string
+  if (status.pouch === false) text = 'Ammo: no ammo pouch equipped.'
+  else if (typeof status.quantity !== 'number' || !Number.isSafeInteger(status.quantity) || status.quantity < 0) return null
+  else {
+    const name = typeof status.name === 'string' ? status.name : ''
+    text = `${status.preferred === true ? 'Preferred ammo' : 'Ammo'}: ${name ? `${name} — ` : ''}${status.unlimited === true ? 'unlimited' : `${status.quantity.toLocaleString()} remaining`}`
+  }
+  return <p className="krynn-ammo-status" role="status" dangerouslySetInnerHTML={{ __html: renderMudHtml(text) }} />
 }
 
 type RoomQuest = { eligible: boolean; unavailableReason?: string; id: number; name: string; description: string; info: string; giver: string; minLevel?: number; maxLevel?: number; time?: number }

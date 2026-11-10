@@ -2295,3 +2295,5 @@
 .quest-history-link[aria-disabled="true"] { opacity: .6; cursor: wait; }
 .quest-history-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .quest-history-list { padding-left: 1.3rem; line-height: 1.8; overflow-wrap: anywhere; }
+
+.krynn-ammo-status { margin: 0; padding: 0.25rem 0.5rem; font-size: 0.9rem; overflow-wrap: anywhere; }

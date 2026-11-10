@@ -11,7 +11,7 @@ function extract(name) {
 }
 const context = vm.createContext({ starWarsMsdpVariableKeys: [], REQUIRED_MSDP_VARIABLES: [] })
 vm.runInContext(ts.transpile(['getConfiguredMsdpVariables', 'resolveMsdpVariableKey', 'mapMsdpUpdate'].map(extract).join('\n')), context)
-const variables = { lootInfo: 'LOOT_INFO', scoreInfo: 'SCORE_INFO', whoInfo: 'WHO_INFO', characterCreation: 'CHARACTER_CREATION', roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
+const variables = { ammoStatus: 'AMMO_STATUS', lootInfo: 'LOOT_INFO', scoreInfo: 'SCORE_INFO', whoInfo: 'WHO_INFO', characterCreation: 'CHARACTER_CREATION', roomContents: 'ROOM_CONTENTS', questAccepted: 'QUEST_ACCEPTED', loreInfo: 'LORE_INFO', roomQuests: 'ROOM_QUESTS', questComplete: 'QUEST_COMPLETE', helpInfo: 'HELP_INFO', questInfo: 'QUEST_INFO', graphicMap: '', wildernessGraphicMap: '', minimap: '' }
 
 test('help MSDP reports require explicit per-MUD enablement', () => {
   assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('HELP_INFO'), false)
@@ -92,4 +92,12 @@ test('loot events are Krynn opt-in and preserve reward fields', () => {
   assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('LOOT_INFO'), true)
   const payload = JSON.stringify({ id: 'loot-1', body: '', fields: [{ section: 'Received', label: 'Item', value: '\tcSword\tn' }] })
   assert.equal(context.mapMsdpUpdate('LOOT_INFO', payload, variables).lootInfo, payload)
+})
+
+
+test('Krynn ammo status subscribes and crosses the gateway intact', () => {
+  assert.equal(context.getConfiguredMsdpVariables(variables, false).includes('AMMO_STATUS'), false)
+  assert.equal(context.getConfiguredMsdpVariables(variables, false, true).includes('AMMO_STATUS'), true)
+  const payload = JSON.stringify({ ranged: true, pouch: true, preferred: true, name: 'steel arrows', quantity: 75 })
+  assert.equal(context.mapMsdpUpdate('AMMO_STATUS', payload, variables).ammoStatus, payload)
 })

@@ -390,3 +390,22 @@ test('loot item links use validated exact targets and keep the loot modal open',
   assert.ok(source.indexOf('{infoModals[0] ? <HelpInfoModal') < source.indexOf('{clientSettings.windows.lore && loreModals[0]'))
   assert.match(source, /onLore=\{\(target\) => sendInputLine\(`lore \$\{target\}`\)\}/)
 })
+
+
+test('Krynn ammo HUD is text only, colored, and hidden without a ranged weapon', () => {
+  assert.equal(context.KrynnAmmoStatus({ value: undefined }), null)
+  assert.equal(context.KrynnAmmoStatus({ value: { ranged: false, quantity: 20 } }), null)
+  const render = (value) => renderToStaticMarkup(context.KrynnAmmoStatus({ value }))
+  const base = { ranged: true, pouch: true, preferred: false, name: '\tcsteel arrows\tn', quantity: 75 }
+  const text = render(base)
+  assert.match(text, /75 remaining/)
+  assert.match(text, /steel arrows/)
+  assert.match(text, /color:/)
+  assert.doesNotMatch(text, /button|<a /)
+  assert.match(render({ ...base, preferred: true, quantity: 0 }), /Preferred ammo:.*0 remaining/)
+  assert.match(render({ ...base, unlimited: true }), /unlimited/)
+  assert.match(render({ ...base, pouch: false }), /no ammo pouch equipped/)
+  assert.equal(context.KrynnAmmoStatus({ value: { ...base, quantity: -1 } }), null)
+  assert.match(render({ ...base, name: '<script>bad</script>' }), /&lt;script&gt;/)
+  assert.ok(source.indexOf('<KrynnAmmoStatus value=') < source.indexOf('<div className="bars">'))
+})
