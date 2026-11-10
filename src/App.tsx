@@ -3628,11 +3628,11 @@ function App() {
               onClose={() => setQuestNotifications((current) => current.slice(1))} />
       ) : null}
 
+      {infoModals[0] ? <HelpInfoModal key={infoModals[0].info.id} kind={infoModals[0].kind} help={infoModals[0].info} onLore={(target) => sendInputLine(`lore ${target}`)} onClose={() => setInfoModals((current) => current.slice(1))} /> : null}
+
       {clientSettings.windows.lore && loreModals[0] ? (
         <HelpInfoModal key={loreModals[0].id} kind="Lore" help={loreModals[0]} onClose={() => setLoreModals((current) => current.slice(1))} />
       ) : null}
-
-      {infoModals[0] ? <HelpInfoModal key={infoModals[0].info.id} kind={infoModals[0].kind} help={infoModals[0].info} onClose={() => setInfoModals((current) => current.slice(1))} /> : null}
 
       {selectedMudPreset?.features?.helpModal && clientSettings.windows.help && helpModal ? (
         <HelpInfoModal help={helpModal} onClose={() => setHelpModal(null)} onNavigate={(topic) => sendInputLine(`help ${topic}`)} />
@@ -5964,7 +5964,7 @@ function RoomContentsPanel({ value, currentRoom, connected, onAction }: {
   </div>
 }
 
-type RoomQuest = { id: number; name: string; description: string; info: string; giver: string; minLevel?: number; maxLevel?: number; time?: number }
+type RoomQuest = { eligible: boolean; unavailableReason?: string; id: number; name: string; description: string; info: string; giver: string; minLevel?: number; maxLevel?: number; time?: number }
 type RoomQuests = { room: number; quests: RoomQuest[] }
 
 function parseRoomQuests(value: MudValue | undefined): RoomQuests | null {
@@ -5973,7 +5973,9 @@ function parseRoomQuests(value: MudValue | undefined): RoomQuests | null {
   if (!isMudRecord(parsed) || !Number.isInteger(parsed.room) || !Array.isArray(parsed.quests)) return null
   const quests = parsed.quests.flatMap((quest): RoomQuest[] => {
     if (!isMudRecord(quest) || typeof quest.id !== 'number' || !Number.isSafeInteger(quest.id) || quest.id < 0 || typeof quest.name !== 'string') return []
-    return [{ id: quest.id, name: quest.name, description: typeof quest.description === 'string' ? quest.description : '',
+    return [{ eligible: quest.eligible === undefined || quest.eligible === true,
+      unavailableReason: typeof quest.unavailableReason === 'string' ? quest.unavailableReason : undefined,
+      id: quest.id, name: quest.name, description: typeof quest.description === 'string' ? quest.description : '',
       info: typeof quest.info === 'string' ? quest.info : '', giver: typeof quest.giver === 'string' ? quest.giver : '',
       minLevel: typeof quest.minLevel === 'number' ? quest.minLevel : undefined,
       maxLevel: typeof quest.maxLevel === 'number' ? quest.maxLevel : undefined,
@@ -5992,17 +5994,18 @@ function RoomQuestNotice({ value, currentRoom, connected, onJoin, modalEnabled =
   if (!visible || !available) return null
   return (
     <aside className="room-quest-notice" aria-label="Quests in this room">
-      <div role="status"><strong>Quests available here</strong><span>{available.quests.length} {available.quests.length === 1 ? 'quest you can join' : 'quests you can join'}</span></div>
+      <div role="status"><strong>Quests in this room</strong><span>{available.quests.length} unfinished {available.quests.length === 1 ? 'quest' : 'quests'}</span></div>
       <button type="button" aria-haspopup={modalEnabled ? 'dialog' : undefined} onClick={() => { if (modalEnabled) setOpenedRoom(available.room); else onOutput?.(formatAvailableQuestsOutput(available)) }}>View quests</button>
-      {modalEnabled && openedRoom === available.room ? <WebOutputModal title="Available quests" titleId="room-quests-title" closeLabel="Close available quests" onClose={() => setOpenedRoom(null)}>
-        <p>These quest givers have work for you in this room.</p>
+      {modalEnabled && openedRoom === available.room ? <WebOutputModal title="Quests in this room" titleId="room-quests-title" closeLabel="Close available quests" onClose={() => setOpenedRoom(null)}>
+        <p>Review unfinished quests and their requirements below.</p>
         <div className="room-quest-list">
           {available.quests.map((quest) => <section className="room-quest-card" key={quest.id}>
             <h3 dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.name) }} />
             <p className="room-quest-giver">Offered by <span dangerouslySetInnerHTML={{ __html: renderMudHtml(quest.giver) }} /></p>
             {quest.description ? <div>{renderWebTextBlocks(quest.description)}</div> : null}
             <p className="room-quest-giver">{quest.minLevel !== undefined && quest.maxLevel !== undefined ? `Levels ${quest.minLevel}–${quest.maxLevel} · ` : ''}{quest.time !== undefined && quest.time > 0 ? `Time limit: ${quest.time} turns` : 'No time limit'}</p>
-            <button type="button" onClick={() => { onJoin(`quest webjoin ${available.room} ${quest.id}`); setOpenedRoom(null) }}>Join quest</button>
+            {!quest.eligible ? <div className="room-quest-unavailable">{renderWebTextBlocks(quest.unavailableReason || 'You cannot take this quest right now.')}</div> : null}
+            <button type="button" disabled={!quest.eligible} onClick={() => { if (!quest.eligible) return; onJoin(`quest webjoin ${available.room} ${quest.id}`); setOpenedRoom(null) }}>Join quest</button>
           </section>)}
         </div>
       </WebOutputModal> : null}
@@ -6100,14 +6103,14 @@ function formatQuestDetailsOutput(quest: QuestEntry): string {
 }
 
 function formatAvailableQuestsOutput(available: RoomQuests): string {
-  return ['Available quests', ...available.quests.map((quest) => [quest.name, `Offered by: ${quest.giver}`,
+  return ['Quests in this room', ...available.quests.map((quest) => [quest.name, `Offered by: ${quest.giver}`,
     quest.description,
     quest.minLevel !== undefined && quest.maxLevel !== undefined ? `Levels ${quest.minLevel}–${quest.maxLevel}` : '',
     quest.time !== undefined && quest.time > 0 ? `Time limit: ${quest.time} turns` : 'No time limit',
-    `To join: quest webjoin ${available.room} ${quest.id}`].filter(Boolean).join('\n\n'))].join('\n\n')
+    quest.eligible ? `To join: quest webjoin ${available.room} ${quest.id}` : `Cannot join: ${quest.unavailableReason || 'You cannot take this quest right now.'}`].filter(Boolean).join('\n\n'))].join('\n\n')
 }
 
-type InfoField = { section: string; label: string; value: string }
+type InfoField = { section: string; label: string; value: string; loreTarget?: string }
 type InfoPlayer = { name: string; role: string; staffTitle?: string; level?: number; race?: string; faction?: string; afk?: boolean; roleplay?: boolean }
 type HelpReferences = { text: string; entries: { label: string; topic?: string }[] }
 type HelpInfo = { seeAlso?: HelpReferences; id: string; topic: string; body: string; truncated: boolean; fields?: InfoField[]; players?: InfoPlayer[] }
@@ -6117,7 +6120,10 @@ function parseHelpInfo(value: MudValue | undefined): HelpInfo | null {
   const parsed = normalizeQuestValue(value)
   if (!isMudRecord(parsed) || typeof parsed.id !== 'string' || typeof parsed.body !== 'string') return null
   const fields = Array.isArray(parsed.fields) ? parsed.fields.filter((field): field is InfoField =>
-    isMudRecord(field) && typeof field.section === 'string' && typeof field.label === 'string' && typeof field.value === 'string') : undefined
+    isMudRecord(field) && typeof field.section === 'string' && typeof field.label === 'string' && typeof field.value === 'string').map((field) => ({
+      section: field.section, label: field.label, value: field.value,
+      ...(typeof field.loreTarget === 'string' && /^}o[1-9][0-9]*$/.test(field.loreTarget) ? { loreTarget: field.loreTarget } : {}),
+    })) : undefined
   const players = Array.isArray(parsed.players) ? parsed.players.flatMap((player): InfoPlayer[] => {
     if (!isMudRecord(player) || typeof player.name !== 'string' || typeof player.role !== 'string') return []
     return [{ name: player.name, role: player.role,
@@ -6183,7 +6189,7 @@ function renderCommandText(body: string): ReactNode {
   return <pre className="web-command-text" dangerouslySetInnerHTML={{ __html: renderMudHtml(body) }} />
 }
 
-function StructuredInfo({ help }: { help: HelpInfo }) {
+function StructuredInfo({ help, onLore }: { help: HelpInfo; onLore?: (target: string) => void }) {
   const sections = [...new Set(help.fields?.map((field) => field.section) ?? [])]
   return <>
     {help.players ? <section aria-label="Visible players">
@@ -6196,7 +6202,10 @@ function StructuredInfo({ help }: { help: HelpInfo }) {
     <div className="web-info-sections">{sections.map((section) => <section key={section} className={section === 'Description' ? 'web-info-description' : undefined}>
       <h3>{section}</h3><dl>{help.fields?.filter((field) => field.section === section).map((field, index) => <Fragment key={index}>
         <dt className={!field.label ? 'web-info-empty-label' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.label) }} />
-        <dd className={!field.label ? 'web-info-prose' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />
+        {onLore && field.loreTarget ? <dd className={!field.label ? 'web-info-prose' : undefined}><button type="button" className="help-reference-link loot-item-link"
+            aria-haspopup="dialog" title="Attempt to lore this item" onClick={() => onLore(field.loreTarget!)}
+            dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} /></dd>
+          : <dd className={!field.label ? 'web-info-prose' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />}
       </Fragment>)}</dl>
     </section>)}</div>
     {help.body ? <details className="web-info-original" open={!help.fields?.length && !help.players?.length}><summary>Full command output</summary>{renderCommandText(help.body)}</details> : null}
@@ -6247,7 +6256,7 @@ function commandModalTitle(help: HelpInfo, kind: string): string {
   return topic && topic.toLowerCase() !== kind.toLowerCase() ? `${kind}: ${topic}` : kind
 }
 
-function HelpInfoModal({ help, onClose, onNavigate, kind = 'Help' }: { help: HelpInfo; onClose: () => void; onNavigate?: (topic: string) => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' | 'Loot' }) {
+function HelpInfoModal({ help, onClose, onNavigate, onLore, kind = 'Help' }: { help: HelpInfo; onClose: () => void; onNavigate?: (topic: string) => void; onLore?: (target: string) => void; kind?: 'Help' | 'Lore' | 'Score' | 'Who' | 'Loot' }) {
   const compact = kind === 'Lore' || kind === 'Loot' || kind === 'Score'
   const displayInfo = compact ? {
     ...help,
@@ -6260,7 +6269,7 @@ function HelpInfoModal({ help, onClose, onNavigate, kind = 'Help' }: { help: Hel
     <WebOutputModal title={commandModalTitle(help, kind)} titleId={`${kind.toLowerCase()}-details-title`}
       closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}${compact ? ` compact-command-modal ${kind.toLowerCase()}-details-modal` : ''}`} onClose={onClose}>
       <article className="help-details-body">
-        {displayInfo.fields?.length || displayInfo.players ? <StructuredInfo help={displayInfo} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(displayInfo.body)}
+        {displayInfo.fields?.length || displayInfo.players ? <StructuredInfo help={displayInfo} onLore={kind === 'Loot' ? onLore : undefined} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(displayInfo.body)}
         {kind === 'Help' && (help.fields?.length || help.players) && help.seeAlso ? <HelpReferenceLinks references={help.seeAlso} onNavigate={onNavigate} /> : null}
       </article>
       {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}

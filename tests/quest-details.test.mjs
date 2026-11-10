@@ -189,8 +189,8 @@ test('room quests reject malformed entries and expose a clickable room notificat
   const props = { value, currentRoom: 1005, connected: true, onJoin() {} }
   const notice = context.RoomQuestNotice(props)
   const html = renderToStaticMarkup(notice)
-  assert.match(html, /Quests available here/)
-  assert.match(html, /1 quest you can join/)
+  assert.match(html, /Quests in this room/)
+  assert.match(html, /1 unfinished quest/)
   assert.match(html, /View quests/)
   notice.props.children[1].props.onClick()
   assert.equal(opened, 1005)
@@ -540,4 +540,32 @@ test('QUEST_HISTORY travels through the gateway as structured data', () => {
   const update = gateway.mapMsdpUpdate('QUEST_HISTORY', payload, { questHistory: 'QUEST_HISTORY' })
   assert.equal(update.questHistory, payload)
   assert.equal(context.parseQuestHistory(update.questHistory).entries[0].questId, 70001)
+})
+
+
+test('blocked unfinished quests keep the indicator and explain why joining is disabled', () => {
+  let opened = 1005
+  context.useState = () => [opened, (value) => { opened = value }]
+  const sent = []
+  const value = { room: 1005, quests: [
+    { id: 900, name: 'Advanced duty', eligible: false, unavailableReason: '\tRYou are not high enough level.\tn' },
+    { id: 901, name: 'Guard duty', eligible: true },
+  ] }
+  const notice = context.RoomQuestNotice({ value, currentRoom: 1005, connected: true, onJoin: (command) => sent.push(command) })
+  const html = renderToStaticMarkup(notice.props.children[2])
+  assert.match(renderToStaticMarkup(notice.props.children[0]), /2 unfinished quests/)
+  assert.match(html, /You are not high enough level/)
+  assert.match(html, /disabled=""/)
+  const cards = notice.props.children[2].props.children[1].props.children
+  const blockedButton = cards[0].props.children.at(-1)
+  assert.equal(blockedButton.props.disabled, true)
+  blockedButton.props.onClick()
+  assert.deepEqual(sent, [])
+  assert.equal(opened, 1005)
+  cards[1].props.children.at(-1).props.onClick()
+  assert.deepEqual(sent, ['quest webjoin 1005 901'])
+  const text = context.formatAvailableQuestsOutput(context.parseRoomQuests(value))
+  assert.match(text, /Cannot join:.*not high enough level/)
+  assert.doesNotMatch(text, /To join: quest webjoin 1005 900/)
+  assert.match(text, /To join: quest webjoin 1005 901/)
 })

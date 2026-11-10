@@ -356,3 +356,37 @@ test('compact score preserves descriptions, zero resources and stat sections', (
   assert.match(html, /Strength<\/dt><dd>18<\/dd>/)
   assert.doesNotMatch(html, /Title|\n\n/)
 })
+
+
+test('loot item links use validated exact targets and keep the loot modal open', () => {
+  const info = context.parseHelpInfo({ id: 'loot-links', body: '', fields: [
+    { section: 'Received items', label: 'Item', value: '\tcA blade\tn', loreTarget: '}o123' },
+    { section: 'Received items', label: 'Item', value: 'A blade', loreTarget: '}o124' },
+    { section: 'Received items', label: 'Item', value: 'Unsafe target', loreTarget: '}o125;quit' },
+    { section: 'Received items', label: 'Item', value: 'Legacy item' },
+  ] })
+  assert.equal(info.fields[2].loreTarget, undefined)
+  const calls = []
+  let closed = false
+  const modal = context.HelpInfoModal({ help: info, kind: 'Loot', onClose() { closed = true }, onLore: (target) => calls.push(target) })
+  const structured = modal.props.children[0].props.children[0]
+  const tree = context.StructuredInfo(structured.props)
+  const buttons = []
+  function visit(node) {
+    if (!node || typeof node !== 'object') return
+    if (Array.isArray(node)) return node.forEach(visit)
+    if (node.type === 'button') buttons.push(node)
+    visit(node.props?.children)
+  }
+  visit(tree)
+  assert.equal(buttons.length, 2)
+  buttons.forEach((button) => button.props.onClick())
+  assert.deepEqual(calls, ['}o123', '}o124'])
+  assert.equal(closed, false)
+  const html = renderToStaticMarkup(tree)
+  assert.match(html, /aria-haspopup="dialog"/)
+  assert.match(html, /A blade/)
+  assert.doesNotMatch(html, /\tc/)
+  assert.ok(source.indexOf('{infoModals[0] ? <HelpInfoModal') < source.indexOf('{clientSettings.windows.lore && loreModals[0]'))
+  assert.match(source, /onLore=\{\(target\) => sendInputLine\(`lore \$\{target\}`\)\}/)
+})
