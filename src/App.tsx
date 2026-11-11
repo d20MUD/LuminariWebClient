@@ -997,7 +997,7 @@ function App() {
         if (message.type === 'chat') {
           setChatOutput((current) =>
             trimTerminalOutputLines(
-              `${current}${normalizeTerminalText(message.text)}`,
+              `${message.reset ? '' : current}${normalizeTerminalText(message.text)}`,
               terminalHistoryLineLimitRef.current,
             ),
           )

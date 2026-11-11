@@ -391,9 +391,10 @@ export type ServerMessage =
       detail: string
     }
   | {
-      /** Communication explicitly marked by the Star Wars MUD chat-window protocol. */
+      /** Communication explicitly marked by the MUD protocol. */
       type: 'chat'
       text: string
+      reset?: boolean
     }
   | {
       type: 'terminal'

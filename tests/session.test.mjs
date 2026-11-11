@@ -16,6 +16,7 @@ function fixture(host = 'krynn.d20mud.com') {
     WebSocket: { OPEN: 1 },
     appSettings: { connection: { muds: [{ host: 'krynn.d20mud.com', features: { helpModal: true } }] } },
     defaultMsdpVariables: {},
+    mapMsdpUpdate: () => ({}),
     normalizeMsdpVariableMap: (value) => value,
     isValidHost: () => true,
     isMovementCommandInput: () => false,
@@ -265,4 +266,27 @@ test('Star Wars destination routing retains its independent split-tag format', (
   result = session.routeChatDestination('ST>Combat\r\n')
   assert.equal(result.terminalText, 'Combat\r\n')
   assert.equal(result.chatText, '')
+})
+
+
+test('Krynn restores combined history once per character connection, including manual login', () => {
+  const { session, sockets, messages } = fixture()
+  const receive = (name) => session.parser.callbacks.onMsdp('CHARACTER_NAME', name)
+  receive('')
+  assert.deepEqual(sockets[0].writes, [])
+  receive('Vertas')
+  receive('Vertas')
+  assert.deepEqual(sockets[0].writes, ['history all\n'])
+  assert.equal(messages.filter((m) => m.type === 'chat' && m.reset).length, 1)
+  session.connect('krynn.d20mud.com', 4300, {}, false)
+  receive('Vertas')
+  assert.deepEqual(sockets[1].writes, ['history all\n'])
+  receive('Other')
+  assert.deepEqual(sockets[1].writes, ['history all\n', 'history all\n'])
+})
+
+test('Krynn history restoration does not send commands to Star Wars', () => {
+  const { session, sockets } = fixture('starwars.d20mud.com')
+  session.parser.callbacks.onMsdp('CHARACTER_NAME', 'Test')
+  assert.deepEqual(sockets[0].writes, [])
 })

@@ -224,6 +224,7 @@ class MudSession {
   private starWarsMode = false
   private helpModalsEnabled = false
   private isKrynnConnection = false
+  private chatHistoryCharacter = ''
   private autoLoginSupported = false
   private movementMapRefreshTimer: ReturnType<typeof setTimeout> | null = null
   private initialMsdpRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -246,6 +247,7 @@ class MudSession {
 
     this.disconnect('Disconnected.')
     this.state = {}
+    this.chatHistoryCharacter = ''
     this.msdpInitialized = false
     this.msdpVariables = normalizeMsdpVariableMap(msdpVariables)
     this.starWarsMode = starWarsMode
@@ -272,6 +274,14 @@ class MudSession {
         }
       },
       onMsdp: (variable, value) => {
+        // CHARACTER_NAME is published by Krynn only in CON_PLAYING. TCP
+        // connection and account/menu prompts are too early for game commands.
+        if (this.isKrynnConnection && variable.toUpperCase() === 'CHARACTER_NAME' &&
+            typeof value === 'string' && value.trim() && this.chatHistoryCharacter !== value) {
+          this.chatHistoryCharacter = value
+          this.send({ type: 'chat', text: '', reset: true })
+          this.sendAutoLoginInput('history all')
+        }
         if (this.isKrynnConnection && variable.toUpperCase() === 'CHAT_MESSAGE') {
           try {
             const event = typeof value === 'string' ? JSON.parse(value) : value
@@ -458,6 +468,7 @@ class MudSession {
     this.sendMsdpPair('256_COLORS', 1)
     this.sendMsdpPair('UTF_8', 1)
     this.applyMsdpConfiguration()
+    if (this.isKrynnConnection) this.sendMsdpPair('REPORT', 'CHARACTER_NAME')
     this.scheduleInitialMsdpRefresh()
   }
 
