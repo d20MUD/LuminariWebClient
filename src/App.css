@@ -2268,6 +2268,27 @@
 .compact-command-modal .web-info-sections dt { padding-right: 0.6rem; }
 .compact-command-modal .web-command-text { padding: 0.35rem; line-height: 1.3; }
 .compact-command-modal .web-info-original { margin-top: 0.4rem; }
+/* Lore keeps its dense layout, with a clear hierarchy between headings,
+   labels and values. Existing inline MUD colors retain priority. */
+.lore-details-modal .web-info-sections { gap: 0.5rem; }
+.lore-details-modal .web-info-sections section {
+  border-left: 3px solid var(--accent);
+  background: linear-gradient(100deg, rgba(var(--surface-rgb), 0.7), rgba(var(--surface-rgb), 0.3));
+}
+.lore-details-modal .web-info-sections h3 {
+  margin-bottom: 0.3rem;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lore-details-modal .web-info-sections dt,
+.lore-details-modal .lore-inline-label { color: var(--accent); font-weight: 600; }
+.lore-details-modal .web-info-sections dd { color: var(--text); line-height: 1.5; }
+.lore-details-modal .web-info-sections dt { line-height: 1.5; }
+.lore-details-modal .web-info-prose { padding-bottom: 0.25rem; }
+
 .score-details-modal .web-info-sections dt,
 .score-details-modal .web-info-sections dd { white-space: normal; }
 @media (min-width: 760px) {
@@ -2281,7 +2302,7 @@
 .dialogue-check-success { color: #8dd3a2; }
 .dialogue-check-failure { color: #f19898; }
 
-.web-info-description { grid-column: 1 / -1; }
+.web-info-description, .web-info-wide-section { grid-column: 1 / -1; }
 .web-info-empty-label { display: none; }
 .web-info-prose { grid-column: 1 / -1; }
 
@@ -2296,4 +2317,4 @@
 .quest-history-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
 .quest-history-list { padding-left: 1.3rem; line-height: 1.8; overflow-wrap: anywhere; }
 
-.krynn-ammo-status { margin: 0; padding: 0.25rem 0.5rem; font-size: 0.9rem; overflow-wrap: anywhere; }
+.krynn-ammo-status { margin: 0; padding: 0.25rem 1rem; font-size: 0.9rem; overflow-wrap: anywhere; }

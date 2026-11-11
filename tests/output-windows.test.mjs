@@ -409,3 +409,42 @@ test('Krynn ammo HUD is text only, colored, and hidden without a ranged weapon',
   assert.match(render({ ...base, name: '<script>bad</script>' }), /&lt;script&gt;/)
   assert.ok(source.indexOf('<KrynnAmmoStatus value=') < source.indexOf('<div className="bars">'))
 })
+
+test('object lore presents complete canonical details above the collapsed command copy', () => {
+  const info = context.parseHelpInfo({ id: 'complete-item', topic: 'a healing ring', body: 'Original command output', fields: [
+    { section: 'Item', label: 'Type', value: 'Worn' },
+    { section: 'Properties', label: '', value: 'Weight: 1, Value: 500, Timer: 0\n\nSpecial Timer 1: 2 Game-Hours' },
+    { section: 'Effects and bonuses', label: '', value: 'Set char bits: SANCTUARY\nAffections: Spell Circle 1: +1 Wizard' },
+    { section: 'Item details', label: '', value: "Gear Spells:\nSpell: bless, Level: 12, Percent: 20\n\n\tcItem can cast the 'heal' spell at level 15 with 2/3 uses remaining.\tn\n-- One of the item uses will be restored in less than 7 minutes.\n-- Type activate 'heal' (target) to use the activated spell.\nUnique identify text: <magical>" },
+  ] })
+  const modal = context.HelpInfoModal({ help: info, kind: 'Lore', onClose() {} })
+  const html = renderToStaticMarkup(modal.props.children[0])
+  const visible = html.slice(0, html.indexOf('<details'))
+  assert.match(visible, /2\/3 uses remaining/)
+  assert.match(visible, /less than 7 minutes/)
+  assert.match(visible, /activate &apos;heal&apos;/)
+  assert.match(visible.replace(/<[^>]+>/g, ''), /Spell: bless, Level: 12/)
+  assert.match(visible, /<strong class="lore-inline-label">Weight:<\/strong>/)
+  assert.match(visible, /<strong class="lore-inline-label">Affections:<\/strong>/)
+  assert.match(visible, /Spell Circle 1: \+1 Wizard/)
+  assert.match(visible, /Special Timer 1/)
+  assert.match(visible.replace(/<[^>]+>/g, ''), /Unique identify text: &lt;magical&gt;/)
+  assert.match(visible, /web-info-wide-section/)
+  assert.match(visible, /color:/)
+  assert.doesNotMatch(visible, /\n\n/)
+})
+
+
+test('lore label styling preserves escaped text and MUD colors without changing other output', () => {
+  const value = '\\tcDamage: 1D8\\tn, Threat: 20\nWeapon Type: long bow <script>alert(1)</script>'
+  const html = context.renderLoreValue(value)
+  assert.match(html, /style="color:/)
+  assert.match(html, /<strong class="lore-inline-label">Damage:<\/strong>/)
+  assert.match(html, /<strong class="lore-inline-label">Threat:<\/strong>/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.doesNotMatch(html, /<script>/)
+  assert.equal(html.replace(/<strong class="lore-inline-label">(.*?)<\/strong>/g, '$1'), context.renderMudHtml(value))
+  const info = { fields: [{ section: 'Properties', label: '', value }] }
+  const normal = renderToStaticMarkup(React.createElement(context.StructuredInfo, { help: info }))
+  assert.doesNotMatch(normal, /lore-inline-label/)
+})

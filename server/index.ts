@@ -121,22 +121,22 @@ if (isDevelopment) {
   })
 }
 
-wss.on('connection', (socket) => {
-  const session = new MudSession(socket)
-  let lastPongAt = Date.now()
-  const heartbeat = setInterval(() => {
-    if (socket.readyState !== WebSocket.OPEN) {
-      return
-    }
-
-    // A browser normally replies to a WebSocket ping automatically.  Keeping
-    // this explicit liveness check prevents an intermediary from silently
-    // retaining a dead upgraded connection forever.
-    if (Date.now() - lastPongAt > WEB_SOCKET_PONG_TIMEOUT_MS) {
+function startWebSocketHeartbeat(socket: WebSocket) {
+  let lastAliveAt = Date.now()
+  let lastCheckAt = lastAliveAt
+  const markAlive = () => { lastAliveAt = Date.now() }
+  const timer = setInterval(() => {
+    if (socket.readyState !== WebSocket.OPEN) return
+    const now = Date.now()
+    // A suspended host or stalled event loop has not given the peer a fair
+    // chance to answer. Probe again and allow a fresh response window.
+    if (now - lastCheckAt > WEB_SOCKET_PONG_TIMEOUT_MS) lastAliveAt = now
+    lastCheckAt = now
+    if (now - lastAliveAt > WEB_SOCKET_PONG_TIMEOUT_MS) {
+      console.warn('Web client connection timed out without a pong or browser message.')
       socket.terminate()
       return
     }
-
     try {
       socket.ping()
     } catch (error) {
@@ -144,10 +144,18 @@ wss.on('connection', (socket) => {
       socket.terminate()
     }
   }, WEB_SOCKET_PING_INTERVAL_MS)
+  socket.on('pong', markAlive)
+  socket.on('message', markAlive)
+  return () => {
+    clearInterval(timer)
+    socket.off('pong', markAlive)
+    socket.off('message', markAlive)
+  }
+}
 
-  socket.on('pong', () => {
-    lastPongAt = Date.now()
-  })
+wss.on('connection', (socket) => {
+  const session = new MudSession(socket)
+  const stopHeartbeat = startWebSocketHeartbeat(socket)
 
   // `ws` emits error events.  Without this listener an intermittent proxy or
   // browser transport error can become an uncaught EventEmitter exception and
@@ -197,7 +205,7 @@ wss.on('connection', (socket) => {
   })
 
   socket.on('close', () => {
-    clearInterval(heartbeat)
+    stopHeartbeat()
     session.disconnect('Disconnected.')
   })
 })

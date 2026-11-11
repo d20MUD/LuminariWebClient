@@ -928,6 +928,7 @@ function App() {
     let disposed = false
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let reconnectAttempt = 0
+    let stopHeartbeat = () => {}
 
     function connectWebSocket() {
       const socket = new WebSocket(getWebSocketUrl())
@@ -941,6 +942,8 @@ function App() {
         const reconnected = reconnectAttempt > 0
         reconnectAttempt = 0
         setProxyReady(true)
+        stopHeartbeat()
+        stopHeartbeat = startBrowserHeartbeat(socket)
         if (reconnected) {
           statusRef.current = 'disconnected'
           setStatus('disconnected')
@@ -955,6 +958,7 @@ function App() {
       })
 
       socket.addEventListener('close', () => {
+        stopHeartbeat()
         if (socketRef.current === socket) {
           socketRef.current = null
         }
@@ -1135,6 +1139,7 @@ function App() {
 
     return () => {
       disposed = true
+      stopHeartbeat()
       if (reconnectTimer) {
         clearTimeout(reconnectTimer)
       }
@@ -5965,6 +5970,26 @@ function RoomContentsPanel({ value, currentRoom, connected, onAction }: {
   </div>
 }
 
+// Application data also keeps intermediaries alive when they do not count
+// WebSocket control frames as activity. Never send a command to the MUD.
+function startBrowserHeartbeat(socket: WebSocket) {
+  const sendHeartbeat = () => {
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'heartbeat' }))
+  }
+  const onVisible = () => { if (document.visibilityState === 'visible') sendHeartbeat() }
+  const timer = window.setInterval(sendHeartbeat, 25_000)
+  window.addEventListener('focus', sendHeartbeat)
+  window.addEventListener('pageshow', sendHeartbeat)
+  document.addEventListener('visibilitychange', onVisible)
+  sendHeartbeat()
+  return () => {
+    window.clearInterval(timer)
+    window.removeEventListener('focus', sendHeartbeat)
+    window.removeEventListener('pageshow', sendHeartbeat)
+    document.removeEventListener('visibilitychange', onVisible)
+  }
+}
+
 function KrynnAmmoStatus({ value }: { value: MudValue | undefined }) {
   if (value === undefined) return null
   const status = normalizeQuestValue(value)
@@ -6204,7 +6229,15 @@ function renderCommandText(body: string): ReactNode {
   return <pre className="web-command-text" dangerouslySetInnerHTML={{ __html: renderMudHtml(body) }} />
 }
 
-function StructuredInfo({ help, onLore }: { help: HelpInfo; onLore?: (target: string) => void }) {
+// Decorate known lore labels only after escaping/rendering the MUD text. Splitting
+// out markup keeps color spans intact and never treats item text as HTML.
+function renderLoreValue(value: string): string {
+  const labels = /(^|[\s,])((?:Weight|Value|Cost\/day|Timer|Min level|Size|Material|Bound to|Can be worn on|Set char bits|Extra flags|Affections|Weapon Type|Enhancement Bonus|Todam|Avg Damage|Special Abilities|Values defined by weapon type|Damage|Threat|Crit\. Multi|Weapon Flags|Damage-Types|Range|Family|Handle Type|Head Type|Special (?:'|&apos;)identify(?:'|&apos;) tag|Unique identify text|Gear Spells|Spell|Level|Percent|Special Timer \d+)\s*:)/gi
+  return renderMudHtml(value).split(/(<[^>]+>)/g).map((part, index) => index % 2 ? part
+    : part.replace(labels, '$1<strong class="lore-inline-label">$2</strong>')).join('')
+}
+
+function StructuredInfo({ help, onLore, styleLore = false }: { help: HelpInfo; onLore?: (target: string) => void; styleLore?: boolean }) {
   const sections = [...new Set(help.fields?.map((field) => field.section) ?? [])]
   return <>
     {help.players ? <section aria-label="Visible players">
@@ -6214,13 +6247,13 @@ function StructuredInfo({ help, onLore }: { help: HelpInfo; onLore?: (target: st
         <span className="web-who-details" dangerouslySetInnerHTML={{ __html: renderMudHtml([player.role, player.staffTitle, player.level !== undefined ? `Level ${player.level}` : '', player.race, player.faction, player.afk ? 'AFK' : '', player.roleplay ? 'RP' : ''].filter(Boolean).join(' · ')) }} />
       </li>)}</ul>
     </section> : null}
-    <div className="web-info-sections">{sections.map((section) => <section key={section} className={section === 'Description' ? 'web-info-description' : undefined}>
+    <div className="web-info-sections">{sections.map((section) => <section key={section} className={section === 'Description' ? 'web-info-description' : section === 'Item details' ? 'web-info-wide-section' : undefined}>
       <h3>{section}</h3><dl>{help.fields?.filter((field) => field.section === section).map((field, index) => <Fragment key={index}>
         <dt className={!field.label ? 'web-info-empty-label' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.label) }} />
         {onLore && field.loreTarget ? <dd className={!field.label ? 'web-info-prose' : undefined}><button type="button" className="help-reference-link loot-item-link"
             aria-haspopup="dialog" title="Attempt to lore this item" onClick={() => onLore(field.loreTarget!)}
             dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} /></dd>
-          : <dd className={!field.label ? 'web-info-prose' : undefined} dangerouslySetInnerHTML={{ __html: renderMudHtml(field.value) }} />}
+          : <dd className={!field.label ? 'web-info-prose' : undefined} dangerouslySetInnerHTML={{ __html: (styleLore ? renderLoreValue(field.value) : renderMudHtml(field.value)) }} />}
       </Fragment>)}</dl>
     </section>)}</div>
     {help.body ? <details className="web-info-original" open={!help.fields?.length && !help.players?.length}><summary>Full command output</summary>{renderCommandText(help.body)}</details> : null}
@@ -6284,7 +6317,7 @@ function HelpInfoModal({ help, onClose, onNavigate, onLore, kind = 'Help' }: { h
     <WebOutputModal title={commandModalTitle(help, kind)} titleId={`${kind.toLowerCase()}-details-title`}
       closeLabel={`Close ${kind.toLowerCase()}`} className={`help-details-modal${kind !== 'Help' ? ' command-details-modal' : ''}${compact ? ` compact-command-modal ${kind.toLowerCase()}-details-modal` : ''}`} onClose={onClose}>
       <article className="help-details-body">
-        {displayInfo.fields?.length || displayInfo.players ? <StructuredInfo help={displayInfo} onLore={kind === 'Loot' ? onLore : undefined} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(displayInfo.body)}
+        {displayInfo.fields?.length || displayInfo.players ? <StructuredInfo help={displayInfo} styleLore={kind === 'Lore'} onLore={kind === 'Loot' ? onLore : undefined} /> : kind === 'Help' ? renderLinkedHelpText(help, onNavigate) : renderCommandText(displayInfo.body)}
         {kind === 'Help' && (help.fields?.length || help.players) && help.seeAlso ? <HelpReferenceLinks references={help.seeAlso} onNavigate={onNavigate} /> : null}
       </article>
       {help.truncated ? <p className="quest-empty">This {kind.toLowerCase()} response exceeded the display limit and was shortened.</p> : null}
