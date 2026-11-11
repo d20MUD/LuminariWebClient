@@ -272,6 +272,15 @@ class MudSession {
         }
       },
       onMsdp: (variable, value) => {
+        if (this.isKrynnConnection && variable.toUpperCase() === 'CHAT_MESSAGE') {
+          try {
+            const event = typeof value === 'string' ? JSON.parse(value) : value
+            if (event && typeof event === 'object' && 'text' in event && typeof event.text === 'string') {
+              this.send({ type: 'chat', text: event.text })
+            }
+          } catch { /* Ignore malformed chat events; never infer chat from Krynn prose. */ }
+          return
+        }
         const partial = mapMsdpUpdate(variable, value, this.msdpVariables)
         const stateUpdate = this.withLocalGraphicMapUpdate(partial)
         if (Object.keys(stateUpdate).length === 0) {

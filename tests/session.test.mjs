@@ -8,7 +8,7 @@ import ts from 'typescript'
 // Exercise the session without starting a listener or connecting to a live MUD.
 const source = readFileSync(new URL('../server/index.ts', import.meta.url), 'utf8')
 const sessionSource = source.slice(source.indexOf('class MudSession'), source.indexOf('class TelnetParser'))
-const helpers = source.slice(source.indexOf('function isValidAutoLoginValue'), source.indexOf('function parseClientMessage'))
+const helpers = source.slice(source.indexOf('function isValidAutoLoginValue'), source.indexOf('function parseClientMessage')) + source.slice(source.indexOf('function minimumNonNegative'), source.indexOf('function isValidHost'))
 function fixture(host = 'krynn.d20mud.com') {
   const sockets = []
   const timers = []
@@ -237,4 +237,32 @@ test('on-demand result commands renew reports before sending the game command', 
     assert.deepEqual(sockets[0].writes[0], Buffer.concat([Buffer.from([255, 250, 69, 1]), Buffer.from('REPORT'), Buffer.from([2]), Buffer.from(variable), Buffer.from([255, 240])]))
     assert.equal(sockets[0].writes[1], `${command}\n`)
   }
+})
+
+
+test('Krynn uses MSDP chat events, preserves repeated ANSI text, and does not classify prose', () => {
+  const { session, messages } = fixture()
+  const text = "\x1b[36mA traveler says, 'Hello'\x1b[0m\r\n"
+  session.parser.callbacks.onMsdp('CHAT_MESSAGE', JSON.stringify({ text }))
+  session.parser.callbacks.onMsdp('CHAT_MESSAGE', JSON.stringify({ text }))
+  assert.deepEqual(messages.filter((message) => message.type === 'chat'), [{ type: 'chat', text }, { type: 'chat', text }])
+  session.parser.callbacks.onMsdp('CHAT_MESSAGE', '{invalid')
+  session.parser.callbacks.onMsdp('CHAT_MESSAGE', JSON.stringify({ text: 123 }))
+  assert.equal(messages.filter((message) => message.type === 'chat').length, 2)
+  session.parser.callbacks.onText('A room description mentions (chat) and shouting.\r\n')
+  assert.equal(messages.at(-1).type, 'terminal')
+})
+
+test('Star Wars destination routing retains its independent split-tag format', () => {
+  const { session } = fixture('d20mud.com')
+  session.starWarsMode = true
+  let result = session.routeChatDestination('Room\r\n\t<DES')
+  assert.equal(result.terminalText, 'Room\r\n')
+  assert.equal(result.chatText, '')
+  result = session.routeChatDestination('T Player Comm>Player (holonet): Hello\r\n\t</DE')
+  assert.equal(result.chatText, 'Player (holonet): Hello\r\n')
+  assert.equal(result.terminalText, '')
+  result = session.routeChatDestination('ST>Combat\r\n')
+  assert.equal(result.terminalText, 'Combat\r\n')
+  assert.equal(result.chatText, '')
 })

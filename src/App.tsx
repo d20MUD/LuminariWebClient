@@ -303,6 +303,9 @@ type ClientSettings = {
     sidebarWidthUnit: SidebarWidthUnit
     sidebarWidthPercent: number
     sidebarWidthPixels: number
+    chatDock: 'left' | 'right'
+    chatFontFamily: SidebarFontFamily
+    chatFontSize: number
     chatPanePosition: ChatPanePosition
     chatPaneWidthUnit: SidebarWidthUnit
     chatPaneWidthPercent: number
@@ -435,6 +438,9 @@ const DEFAULT_CLIENT_SETTINGS: ClientSettings = {
     sidebarWidthUnit: 'pixels',
     sidebarWidthPercent: 30,
     sidebarWidthPixels: 416,
+    chatDock: 'left',
+    chatFontFamily: 'mono',
+    chatFontSize: 14,
     chatPanePosition: 'column',
     chatPaneWidthUnit: 'pixels',
     chatPaneWidthPercent: 30,
@@ -1303,11 +1309,13 @@ function App() {
     [clientSettings.sidebar.fontFamily, clientSettings.sidebar.fontSize],
   )
   const isMinimalistMode = clientSettings.layout.minimalistMode
-  const chatPanePosition = clientSettings.layout.chatPanePosition
-  const showStarWarsChatPane = isStarWarsConnection && !isMinimalistMode
+  const chatPanePosition = selectedMudId === 'krynn' ? 'column' : clientSettings.layout.chatPanePosition
+  const showStarWarsChatPane = (isStarWarsConnection || selectedMudId === 'krynn') && !isMinimalistMode
   const isChatPaneColumn = showStarWarsChatPane && chatPanePosition === 'column'
   const isChatPaneBelowSidebar = showStarWarsChatPane && chatPanePosition === 'below-sidebar'
-  const layoutColumnOrder = clientSettings.layout.columnOrder
+  const layoutColumnOrder: LayoutColumnId[] = selectedMudId === 'krynn'
+    ? clientSettings.layout.chatDock === 'left' ? ['chat', 'main', 'sidebar'] : ['main', 'chat', 'sidebar']
+    : clientSettings.layout.columnOrder
   const layoutStyle = useMemo<
     CSSProperties & {
       '--layout-sidebar-width': string
@@ -1453,12 +1461,12 @@ function App() {
         ref={chatRef}
         className="chat-output"
         data-prevent-command-focus
-        aria-label="Star Wars communication chat"
-        style={terminalOutputStyle}
+        aria-label="Communication chat"
+        style={{ ...terminalOutputStyle, fontFamily: SIDEBAR_FONT_FAMILIES[clientSettings.layout.chatFontFamily], fontSize: `${clientSettings.layout.chatFontSize}px` }}
         dangerouslySetInnerHTML={{
           __html:
             chatOutputHtml ||
-            '<span class="terminal-muted">No communication received yet. Use the MUD\'s chatwindow command to route all channel output here.</span>',
+            '<span class="terminal-muted">No communication received yet.</span>',
         }}
       />
     </section>
@@ -2670,15 +2678,18 @@ function App() {
                       </div>
                     </section>
 
-                    {isStarWarsConnection ? (
+                    {isStarWarsConnection || selectedMudId === 'krynn' ? (
                       <section className="settings-group">
                         <div className="settings-group-header">
                           <h4>Chat pane</h4>
-                          <p>Choose its location and size. Column positions automatically swap so each one stays unique.</p>
+                          <p>Choose where chat appears and adjust its font and size.</p>
                         </div>
 
                         <div className="settings-fields">
-                          <label>
+                          {selectedMudId === 'krynn' ? <label><span>Dock</span><select value={clientSettings.layout.chatDock} onChange={(event) => updateLayoutSettings({ chatDock: event.target.value === 'right' ? 'right' : 'left', chatPanePosition: 'column' })}><option value="left">Left of main output</option><option value="right">Right of main output</option></select></label> : null}
+                          <label><span>Chat font</span><select value={clientSettings.layout.chatFontFamily} onChange={(event) => { if (isSidebarFontFamily(event.target.value)) updateLayoutSettings({ chatFontFamily: event.target.value }) }}>{SIDEBAR_FONT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select></label>
+                          <label><span>Chat font size</span><select value={clientSettings.layout.chatFontSize} onChange={(event) => updateLayoutSettings({ chatFontSize: Number(event.target.value) })}>{OUTPUT_FONT_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size}px</option>)}</select></label>
+                          {isStarWarsConnection ? <label>
                             <span>Placement</span>
                             <select
                               value={clientSettings.layout.chatPanePosition}
@@ -2693,8 +2704,7 @@ function App() {
                                   {option.label}
                                 </option>
                               ))}
-                            </select>
-                          </label>
+                            </select></label> : null}
 
                           <label>
                             <span>Width mode</span>
@@ -2783,7 +2793,7 @@ function App() {
                           </label>
                         </div>
 
-                        {clientSettings.layout.chatPanePosition === 'column' ? (
+                        {isStarWarsConnection && clientSettings.layout.chatPanePosition === 'column' ? (
                           <div className="settings-fields">
                             {LAYOUT_COLUMN_OPTIONS.map((column) => (
                               <label key={column.id}>
@@ -4429,6 +4439,9 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
         readNumericSetting(layoutRecord?.sidebarWidthPixels),
         DEFAULT_CLIENT_SETTINGS.layout.sidebarWidthPixels,
       ),
+      chatDock: layoutRecord?.chatDock === 'right' ? 'right' : 'left',
+      chatFontFamily: isSidebarFontFamily(layoutRecord?.chatFontFamily) ? layoutRecord.chatFontFamily : 'mono',
+      chatFontSize: Math.min(24, Math.max(8, readNumericSetting(layoutRecord?.chatFontSize) ?? 14)),
       chatPanePosition: normalizeChatPanePosition(layoutRecord?.chatPanePosition),
       chatPaneWidthUnit: isSidebarWidthUnit(layoutRecord?.chatPaneWidthUnit)
         ? layoutRecord.chatPaneWidthUnit
