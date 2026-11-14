@@ -46,13 +46,13 @@ function ClanDetails({ view, fresh, onAction }: { view: ClanReady; fresh: boolea
   const price = reviewedBuff?.tiers.find((t) => t.tier === review?.tier)?.cost_eighths ?? '0'
   const nextUnlocks = [...view.next_unlocks].sort((a, b) => a.level - b.level)
   return <div className="clan-panel">
-    <h3>{clanPlainText(view.clan.name)}</h3>
+    <header className="clan-heading"><h3>{clanPlainText(view.clan.name)}</h3><span>Level {view.clan.level}</span></header>
     <dl className="clan-balances">
-      <dt>Clan level</dt><dd>{view.clan.level}</dd>
-      <dt>Lifetime Influence</dt><dd>{clanPoints(view.clan.xp_eighths)}{view.clan.next_level_xp_eighths !== null ? ` / ${clanPoints(view.clan.next_level_xp_eighths)}` : ' (maximum)'}</dd>
-      <dt>Spendable Influence</dt><dd>{clanPoints(view.clan.influence_eighths)}</dd>
+      <dt>Progress</dt><dd>{clanPoints(view.clan.xp_eighths)}{view.clan.next_level_xp_eighths !== null ? ` / ${clanPoints(view.clan.next_level_xp_eighths)}` : ' (maximum)'}</dd>
+      <dt>Influence</dt><dd>{clanPoints(view.clan.influence_eighths)}</dd>
       <dt>Your Favor</dt><dd>{clanPoints(view.favor.eighths)} · {clanPlainText(view.favor.standing)}</dd>
     </dl>
+    <details className="clan-more"><summary>Progress details &amp; weekly limits</summary>
     <p className="clan-note">Favor is cumulative and is never spent.</p>
     {view.favor.next_standing_eighths !== null ? <p>Next standing at {clanPoints(view.favor.next_standing_eighths)} Favor.</p> : null}
     {nextUnlocks.length ? <details><summary>Next unlocks</summary><ul>{nextUnlocks.map((u) => <li key={u.name}>Level {u.level}: {clanPlainText(u.name)}</li>)}</ul></details> : <p>All initial buff tiers are unlocked.</p>}
@@ -61,17 +61,20 @@ function ClanDetails({ view, fresh, onAction }: { view: ClanReady; fresh: boolea
       <p>Favor earned: {clanPoints(view.contribution.favor_eighths)} / {clanPoints(view.contribution.favor_cap_eighths)}. Resets {deadline(view.contribution.week_ends_at)}.</p>
       <ul>{view.contribution.sources.map((s) => <li key={s.id}>{clanPlainText(s.name)}: {s.used} / {s.limit}</li>)}</ul>
     </details>
+    </details>
+    <details className="clan-more"><summary>Jobs &amp; quartermaster</summary>
     <ClanServices content={view.content} serverTime={view.server_time} fresh={fresh} onAction={onAction} />
+    </details>
     <h4>Buffs · {view.slots_used}/{view.slots_total} slots · {view.combat_used}/1 combat</h4>
     {!fresh ? <p role="status">Waiting for a fresh clan report. Actions are paused.</p> : null}
     {!view.buff_state_available ? <p role="status">Buff storage is unavailable; saved effects and timers cannot be displayed safely.</p> : null}
-    {!view.may_manage ? <p className="clan-note">Only the clan leader or a delegated rank can manage buffs.</p> : null}
+
     {pending ? <div className="clan-pending" role="status">
       <p>{recorded ? 'The operation is recorded.' : 'Operation submitted. Check the command result; retries reuse the same receipt.'}</p>
       <button type="button" onClick={() => { const command = buffIntentCommand(pending); if (command) onAction(command) }}>Retry same operation</button>
       <button type="button" onClick={() => { if (writePending(storageKey, null)) { pendingRef.current = null; setPending(null) } }}>Clear after checking result</button>
     </div> : null}
-    {view.buff_state_available ? view.buffs.map((b) => <BuffCard key={b.family} buff={b} fresh={fresh} busy={!!pending} onChoose={choose} />) : null}
+    {view.buff_state_available ? view.buffs.map((b) => <BuffCard key={b.family} buff={b} fresh={fresh} busy={!!pending} mayManage={view.may_manage} onChoose={choose} />) : null}
     {review && reviewedBuff ? <section className="clan-review" aria-label="Confirm buff change">
       <p>{review.kind === 'cancel' ? `Cancel ${clanPlainText(reviewedBuff.name)}? There is no refund and its cooldown remains.` : `${review.activation ? 'Replace the selected slot with' : 'Activate'} ${clanPlainText(reviewedBuff.name)} tier ${review.tier} in slot ${review.slot} for ${clanPoints(price)} Influence?${review.activation ? ' The replaced buff is canceled without refund.' : ''}`}</p>
       <button type="button" disabled={!fresh || !!pending} onClick={confirm}>Confirm {review.kind === 'cancel' ? 'cancellation' : 'activation'}</button>
@@ -81,12 +84,14 @@ function ClanDetails({ view, fresh, onAction }: { view: ClanReady; fresh: boolea
   </div>
 }
 
-function BuffCard({ buff, fresh, busy, onChoose }: { buff: ClanBuff; fresh: boolean; busy: boolean; onChoose: (family: number, tier: number, slot: number, kind: 'activate' | 'cancel') => void }) {
+function BuffCard({ buff, fresh, busy, mayManage, onChoose }: { buff: ClanBuff; fresh: boolean; busy: boolean; mayManage: boolean; onChoose: (family: number, tier: number, slot: number, kind: 'activate' | 'cancel') => void }) {
   const [tierNumber, setTier] = useState(1), [slotNumber, setSlot] = useState(1)
   const tier = buff.tiers.find((t) => t.tier === tierNumber)!, slot = tier.slots.find((s) => s.slot === slotNumber)!
-  return <article className="clan-buff">
-    <h5>{clanPlainText(buff.name)} <small>{buff.category}</small></h5>
+  return <details className={`clan-buff${buff.active ? ' clan-buff-active' : ''}`}>
+    <summary><span>{clanPlainText(buff.name)}</span><small>{buff.active ? `T${buff.tier} · Active` : buff.cooling_down ? 'Cooldown' : 'Inactive'}</small></summary>
+    <div className="clan-buff-details">
     <p>{buff.active ? `Tier ${buff.tier} · slot ${buff.slot} · active until ${deadline(buff.expires_at)}` : 'Inactive'}{buff.cooling_down ? ` · next use ${deadline(buff.next_available_at)}` : ''}</p>
+    {mayManage ? <>
     <div className="clan-choices">
       <label>Tier<select value={tierNumber} onChange={(e) => setTier(Number(e.target.value))}>{buff.tiers.map((t) => <option key={t.tier} value={t.tier}>{t.tier} · level {t.unlock_level} · {clanPoints(t.cost_eighths)} Influence</option>)}</select></label>
       <label>Slot<select value={slotNumber} onChange={(e) => setSlot(Number(e.target.value))}>{tier.slots.map((s) => <option key={s.slot} value={s.slot}>{s.slot}{s.replace_activation_uid ? ' (occupied)' : ''}</option>)}</select></label>
@@ -94,5 +99,7 @@ function BuffCard({ buff, fresh, busy, onChoose }: { buff: ClanBuff; fresh: bool
     <p className="clan-lock" id={`clan-lock-${buff.family}`}>{slot.reasons.map(clanPlainText).join(' ')}</p>
     <button type="button" disabled={!fresh || busy || !slot.enabled} aria-describedby={`clan-lock-${buff.family}`} onClick={() => onChoose(buff.family, tierNumber, slotNumber, 'activate')}>{slot.replace_activation_uid ? 'Review replacement' : 'Review activation'}</button>
     {buff.active ? <><button type="button" disabled={!fresh || busy || !buff.cancel.enabled} onClick={() => onChoose(buff.family, buff.tier, buff.slot, 'cancel')}>Review cancellation</button><p className="clan-lock">{buff.cancel.reasons.map(clanPlainText).join(' ')}</p></> : null}
-  </article>
+    </> : <p className="clan-note">Managed by your clan leader or a delegated rank.</p>}
+    </div>
+  </details>
 }

@@ -2119,7 +2119,7 @@
 .room-entity-harvest { display: block; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .room-entity-actions { display: flex; flex-wrap: wrap; gap: 0.4rem; padding: 0.5rem 0; }
 
-[aria-label="Sidebar sections"].tab-strip { display: flex; flex-wrap: nowrap; gap: 0.25rem; padding: 0.6rem 0.4rem 0; overflow-x: auto; }
+[aria-label="Sidebar sections"].tab-strip { flex: 0 0 auto; min-height: 2.8rem; box-sizing: border-box; display: flex; flex-wrap: nowrap; gap: 0.25rem; padding: 0.6rem 0.4rem 0; overflow-x: auto; }
 [aria-label="Sidebar sections"] .tab-button { flex: 1 0 auto; min-width: 0; padding: 0.4rem 0.25rem; font-size: 0.68rem; white-space: nowrap; }
 
 .character-creation-modal { width: calc(100vw - 2rem); max-width: none; box-sizing: border-box; }
@@ -2320,13 +2320,13 @@
 
 .krynn-ammo-status { margin: 0; padding: 0.25rem 1rem; font-size: 0.9rem; overflow-wrap: anywhere; }
 
-.clan-panel { min-width: 0; overflow-wrap: anywhere; font-size: .9em; }
+.clan-panel { padding: 0 .75rem .65rem; min-width: 0; overflow-wrap: anywhere; font-size: .9em; }
 .clan-panel h3, .clan-panel h4, .clan-panel h5 { margin: .65rem 0; }
 .clan-balances { display: grid; grid-template-columns: minmax(5rem, 1fr) minmax(0, 2fr); gap: .35rem .65rem; }
 .clan-balances dt { opacity: .75; }
 .clan-balances dd { margin: 0; font-variant-numeric: tabular-nums; }
 .clan-note, .clan-lock { font-size: .9em; opacity: .8; }
-.clan-buff, .clan-review, .clan-pending { border: 1px solid var(--panel-border, #555); border-radius: .4rem; padding: .65rem; margin: .75rem 0; }
+.clan-review, .clan-pending { border: 1px solid var(--panel-border, #555); border-radius: .4rem; padding: .65rem; margin: .75rem 0; }
 .clan-buff h5 { font-size: 1em; }
 .clan-buff small { opacity: .7; font-weight: normal; }
 .clan-choices { display: flex; flex-wrap: wrap; gap: .5rem; }
@@ -2335,7 +2335,7 @@
 .clan-panel button { margin: .2rem .3rem .2rem 0; white-space: normal; max-width: 100%; }
 .clan-panel button:disabled { opacity: .5; cursor: not-allowed; }
 .clan-panel summary { cursor: pointer; padding: .35rem 0; }
-@media (max-width: 480px) { .clan-balances { grid-template-columns: 1fr; gap: .2rem; } .clan-balances dd { margin-bottom: .5rem; } .clan-choices label { flex-basis: 100%; } }
+@media (max-width: 480px) { .clan-choices label { flex-basis: 100%; } }
 
 .clan-service { border-top: 1px solid var(--border-color, #444); padding-block: .65rem; }
 .clan-service summary { cursor: pointer; font-weight: 600; }
@@ -2361,3 +2361,18 @@
 .creation-age-card dl > div { display: flex; justify-content: space-between; gap: 1rem; }
 .creation-age-card dd { margin: 0; font-variant-numeric: tabular-nums; }
 .creation-response-editor textarea { min-height: 16rem; white-space: pre-wrap; }
+
+.clan-heading { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+.clan-heading h3 { margin: 0; font-size: 1em; }
+.clan-heading > span { flex-shrink: 0; color: var(--muted); font-size: .85em; }
+.clan-balances { margin: .5rem 0; grid-template-columns: minmax(5rem, .8fr) minmax(0, 1.4fr); gap: .2rem .5rem; }
+.clan-panel .clan-more > summary { font-size: .9em; color: var(--muted); }
+.clan-panel h4 { font-size: .95em; margin: .6rem 0 .3rem; }
+.clan-buff { border-top: 1px solid var(--border, #555); margin: 0; }
+.clan-panel .clan-buff > summary { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; padding: .45rem 0; font-size: .9em; }
+.clan-buff > summary > span::before { content: '▸ '; color: var(--muted); }
+.clan-buff[open] > summary > span::before { content: '▾ '; }
+.clan-buff > summary small { flex-shrink: 0; font-size: .85em; }
+.clan-buff-active > summary small { color: var(--accent); opacity: 1; }
+.clan-buff-details { padding: 0 0 .5rem; }
+.clan-buff-details p { margin: .35rem 0; }

@@ -63,7 +63,7 @@ test('exact eighth-point currencies and plain escaped labels remain safe', () =>
   assert.equal(ctx.clanPoints('9007199254740993'),'1125899906842624.125')
   const value = clone(); value.clan.name='\tR<script>alert(1)</script>\tn';value.buffs[0].name='\u001b[31m<img src=x onerror=evil>';value.next_unlocks[0].name='<svg onload=evil>'
   const html=renderToStaticMarkup(React.createElement(ctx.ClanPanel,{value,connected:true,receivedAt:Date.now(),onAction(){}}))
-  assert.match(html,/Lifetime Influence/);assert.match(html,/Influence/);assert.match(html,/100\.125/);assert.match(html,/Next unlocks/)
+  assert.match(html,/<dt>Progress<\/dt>/);assert.match(html,/Influence/);assert.match(html,/100\.125/);assert.match(html,/Next unlocks/)
   assert.doesNotMatch(html,/<script>|<img|<svg/);assert.match(html,/&lt;script&gt;/)
 })
 
