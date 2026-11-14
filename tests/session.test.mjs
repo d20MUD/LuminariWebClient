@@ -307,3 +307,38 @@ test('Krynn clan report is restored after copyover and stale identity data is cl
   session.parser.callbacks.onMsdp('CHARACTER_NAME', 'DifferentCharacter')
   assert.equal(session.state.clanProgress, null)
 })
+
+test('creation editor transfers literal multiline text through bounded ASCII JSON chunks', () => {
+  const { session, sockets, timers } = fixture()
+  session.state = { characterCreation: { active: true, step: 'editor', editorMaxBytes: 10000 } }
+  const text = 'A café costs $5. 😀\n/s is prose\n\n' + 'Long text '.repeat(150)
+  session.submitCreationEditor('save', text)
+  while (timers.length) timers.shift().callback()
+  const writes = sockets[0].writes.filter((line) => typeof line === 'string' && line.startsWith('@creation-editor-'))
+  assert.equal(writes[0], '@creation-editor-reset\n')
+  assert.equal(writes.at(-1), '@creation-editor-save\n')
+  const chunks = writes.slice(1, -1).map((line) => {
+    assert.ok(Buffer.byteLength(line) < 400)
+    assert.match(line, /^[\x20-\x7e]*\n$/)
+    assert.doesNotMatch(line, /\$/)
+    return JSON.parse(line.slice('@creation-editor-append '.length).trim())
+  })
+  assert.equal(chunks.join(''), text.replace(/\n/g, '\r\n'))
+})
+
+test('creation editor refuses oversized or non-editor transfers and stops on disconnect', () => {
+  const { session, sockets, timers } = fixture()
+  session.state = { characterCreation: { active: true, step: 'options', editorMaxBytes: 3 } }
+  session.submitCreationEditor('save', 'abc')
+  assert.equal(sockets[0].writes.length, 0)
+  session.state.characterCreation.step = 'editor'
+  session.submitCreationEditor('save', 'abcd')
+  assert.equal(sockets[0].writes.length, 0)
+  session.submitCreationEditor('cancel', '')
+  assert.equal(sockets[0].writes.at(-1), '@creation-editor-cancel\n')
+  session.submitCreationEditor('save', 'abc')
+  const count = sockets[0].writes.length
+  session.disconnect('test')
+  while (timers.length) timers.shift().callback()
+  assert.equal(sockets[0].writes.length, count)
+})

@@ -356,6 +356,7 @@ function normalizeMsdpVariableValue(value: unknown, fallback: string) {
 }
 
 export type ClientMessage =
+  | { type: 'creation-editor'; action: 'save' | 'cancel'; text: string }
   | { type: 'create-character'; accountName: string; accountPassword: string }
   | {
       type: 'connect'

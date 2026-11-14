@@ -190,6 +190,11 @@ wss.on('connection', (socket) => {
       return
     }
 
+    if (message.type === 'creation-editor') {
+      session.submitCreationEditor(message.action, message.text)
+      return
+    }
+
     if (message.type === 'create-character') {
       session.startCharacterCreation(message.accountName, message.accountPassword)
       return
@@ -222,6 +227,7 @@ server.listen(port, () => {
 class MudSession {
   private mudSocket: net.Socket | null = null
   private parser: TelnetParser | null = null
+  private editorTransferTimer: ReturnType<typeof setTimeout> | null = null
   private state: MudState = {}
   private msdpInitialized = false
   private msdpVariables: MsdpVariableMap = normalizeMsdpVariableMap(defaultMsdpVariables)
@@ -385,6 +391,8 @@ class MudSession {
   }
 
   disconnect(detail: string) {
+    if (this.editorTransferTimer !== null) clearTimeout(this.editorTransferTimer)
+    this.editorTransferTimer = null
     if (this.mudSocket) {
       this.mudSocket.destroy()
     }
@@ -394,7 +402,46 @@ class MudSession {
     this.sendStatus('disconnected', detail)
   }
 
+  submitCreationEditor(action: 'save' | 'cancel', text: string) {
+    const socket = this.mudSocket
+    let creation: Record<string, unknown>
+    try {
+      const payload = this.state.characterCreation
+      creation = (typeof payload === 'string' ? JSON.parse(payload) : payload) as Record<string, unknown>
+    } catch { return }
+    if (!this.isKrynnConnection || !socket || socket.destroyed || !creation || creation.active !== true ||
+        creation.step !== 'editor' || this.editorTransferTimer !== null) return
+    if (action === 'cancel') { socket.write('@creation-editor-cancel\n'); return }
+    const limit = typeof creation.editorMaxBytes === 'number' ? creation.editorMaxBytes : 0
+    const normalized = text.replace(/\r\n?/g, '\n').replace(/\n/g, '\r\n')
+    if (!limit || Buffer.byteLength(normalized, 'utf8') > limit || normalized.includes('\0')) return
+    // The MUD's terminal input doubles dollars and filters non-ASCII bytes.
+    // JSON escapes carry literal text through that layer without alteration.
+    const encode = (value: string) => JSON.stringify(value).replace(/[^\x20-\x7e]|\$/g,
+      (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`)
+    const lines = ['@creation-editor-reset']
+    let chunk = ''
+    for (const character of normalized) {
+      if (encode(chunk + character).length > 350) {
+        lines.push(`@creation-editor-append ${encode(chunk)}`)
+        chunk = ''
+      }
+      chunk += character
+    }
+    if (chunk) lines.push(`@creation-editor-append ${encode(chunk)}`)
+    lines.push('@creation-editor-save')
+    const next = () => {
+      this.editorTransferTimer = null
+      if (this.mudSocket !== socket || socket.destroyed) return
+      const line = lines.shift()
+      if (line !== undefined) socket.write(`${line}\n`)
+      if (lines.length) this.editorTransferTimer = setTimeout(next, 100)
+    }
+    next()
+  }
+
   sendInput(text: string) {
+    if (this.editorTransferTimer !== null) return
     // A manual response means the player has taken over the login flow.
     this.autoLogin = null
     if (!this.mudSocket || this.mudSocket.destroyed) {
@@ -610,6 +657,8 @@ class MudSession {
   }
 
   private cleanupSocket() {
+    if (this.editorTransferTimer !== null) clearTimeout(this.editorTransferTimer)
+    this.editorTransferTimer = null
     if (this.movementMapRefreshTimer) {
       clearTimeout(this.movementMapRefreshTimer)
       this.movementMapRefreshTimer = null
@@ -1125,6 +1174,11 @@ function parseClientMessage(data: RawData): ClientMessage | null {
 
     if (message.type === 'heartbeat') {
       return { type: 'heartbeat' }
+    }
+
+    if (message.type === 'creation-editor' && (message.action === 'save' || message.action === 'cancel') &&
+        typeof message.text === 'string' && Buffer.byteLength(message.text, 'utf8') <= 65536) {
+      return { type: 'creation-editor', action: message.action, text: message.text }
     }
 
     if (message.type === 'input' && typeof message.text === 'string') {

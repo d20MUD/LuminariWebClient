@@ -9,7 +9,7 @@ import ts from 'typescript'
 const helpers = readFileSync(new URL('../src/character-creation.ts', import.meta.url), 'utf8').replace(/^import .*$/gm, '').replaceAll('export ', '')
 const component = readFileSync(new URL('../src/CharacterCreation.tsx', import.meta.url), 'utf8').replace(/^import .*$/gm, '').replaceAll('export ', '')
 let submitted = false
-const context = vm.createContext({ React, useEffect: () => {}, useRef: () => ({ current: null }), useState: (initial) => [typeof initial === 'boolean' ? submitted : initial, (value) => { if (typeof value === 'boolean') submitted = value }] })
+const context = vm.createContext({ TextEncoder, React, useEffect: () => {}, useRef: () => ({ current: null }), useState: (initial) => [typeof initial === 'boolean' ? submitted : initial, (value) => { if (typeof value === 'boolean') submitted = value }] })
 vm.runInContext(ts.transpile(`${helpers}\n${component}`, { target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.React }), context)
 const step = (overrides = {}) => context.parseCreationStep({ id: 'step-1', active: true, canBack: true, step: 'race', state: 32, name: 'Newname', title: 'Choose your race', body: 'Choose a race', choices: [{ value: 'human', label: 'Human', description: 'Versatile adventurers.' }], ...overrides })
 
@@ -47,7 +47,7 @@ test('later setup steps and editors remain usable through the UI', () => {
   submitted = false
   const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation: step({ step: 'editor', choices: [], body: 'Use /s to save', canBack: false }), onRespond() {}, renderText: (text) => React.createElement('p', null, text) }))
   assert.match(html, /textarea/)
-  assert.match(html, /Use \/s to save/)
+  assert.doesNotMatch(html, /Use \/s to save/)
   assert.doesNotMatch(html, /creation-previous/)
 })
 
@@ -173,7 +173,7 @@ test('character options show menu buttons without repeated terminal prose or res
   submitted = false
   const fallback = renderToStaticMarkup(context.CharacterCreationPanel({ creation: step({ step: 'options', state: 62, choices: [], body: 'Please select again.' }), onRespond() {}, renderText: (text) => text }))
   assert.match(fallback, /Please select again/)
-  assert.match(fallback, /<input/)
+  assert.doesNotMatch(fallback, /<input|<form|Or enter a response/)
 })
 
 test('race and class help use the original-format renderer only for their help states', () => {
@@ -188,5 +188,101 @@ test('race and class help use the original-format renderer only for their help s
     }))
     assert.deepEqual(preserved, [original])
     assert.match(html, /Ability:          - First line\n                    continuation\n\nNext ability\./)
+  }
+})
+
+test('short description features, adjectives and review actions use server buttons without command input', () => {
+  for (const state of [53, 54, 55, 56, 57, 58, 59]) {
+    submitted = false
+    const commands = []
+    const creation = step({ step: 'short-description', state, canBack: false,
+      descriptionPreview: 'a blue-eyed human <script>', body: '1) old text columns  2) old option',
+      choices: [{ value: state === 53 || state === 58 ? '' : '12', label: state === 59 ? 'Save description' : 'Blue eyes' }] })
+    const panel = context.CharacterCreationPanel({ creation, onRespond: (value) => commands.push(value), renderText: (text) => React.createElement('span', null, text) })
+    const html = renderToStaticMarkup(panel)
+    assert.match(html, /Your short description/)
+    assert.match(html, /creation-descriptor-choices/)
+    assert.match(html, /&lt;script&gt;/)
+    assert.doesNotMatch(html, /<input|<form|<script>/)
+    const buttons = panel.props.children.find((child) => child?.props?.['data-creation-step'] === 'short-description')
+    buttons.props.children.flat().filter(Boolean)[0].props.onClick()
+    assert.deepEqual(commands, [creation.choices[0].value])
+  }
+})
+
+test('short description options never fall back to parsing stale text columns', () => {
+  submitted = false
+  const creation = step({ step: 'short-description', state: 56, choices: [], body: '1) stale adjective' })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.doesNotMatch(html, /creation-choice-label|<input/)
+})
+
+
+test('all creation menus omit the generic command bar while name and editor keep dedicated fields', () => {
+  for (const kind of ['options', 'gender', 'race', 'class', 'confirm', 'continue', 'roleplay', 'short-description']) {
+    submitted = false
+    const creation = step({ step: kind, state: 99, choices: [{ value: '1', label: 'Choose this' }] })
+    const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+    assert.doesNotMatch(html, /<input|<form|Or enter a response|Your response/)
+    assert.match(html, /Choose this/)
+  }
+  for (const kind of ['name', 'editor']) {
+    submitted = false
+    const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation: step({ step: kind, choices: [] }), onRespond() {}, renderText: (text) => text }))
+    assert.match(html, kind === 'name' ? /Character name/ : /Choose your race/)
+    assert.match(html, /<form/)
+  }
+})
+
+
+test('legacy short-description states never parse two-column text into buttons or display raw menus', () => {
+  submitted = false
+  const creation = step({ step: 'options', state: 56, choices: [], body: '1) a big    2) a large\n3) a small' })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.doesNotMatch(html, /a big|a large|a small|Instructions and feedback|<input/)
+  assert.match(html, /Waiting for descriptor choices/)
+})
+
+
+test('short description features and adjectives sort alphabetically while preserving server values', () => {
+  for (const state of [54, 55, 56, 57]) {
+    submitted = false
+    const commands = []
+    const creation = step({ step: 'short-description', state, canBack: false, choices: [
+      { value: '8', label: 'Wavy' }, { value: '12', label: 'blue' }, { value: '3', label: 'Amber' },
+    ] })
+    const panel = context.CharacterCreationPanel({ creation, onRespond: (value) => commands.push(value), renderText: (text) => text })
+    const grid = panel.props.children.find((child) => child?.props?.['data-creation-step'] === 'short-description')
+    const buttons = grid.props.children.flat().filter(Boolean)
+    assert.deepEqual(buttons.map((button) => button.key), ['3', '12', '8'])
+    buttons[0].props.onClick()
+    assert.deepEqual(commands, ['3'])
+  }
+})
+
+
+test('age cards separate ability adjustments from choice buttons and hide the terminal menu', () => {
+  submitted = false
+  const creation = step({ step: 'age', state: 75, body: 'RAW AGE MENU', choices: [{ value: '2', label: 'Adolescent', adjustments: [{ ability: 'Dexterity', modifier: 2 }, { ability: 'Wisdom', modifier: -1 }] }] })
+  const commands = []
+  const panel = context.CharacterCreationPanel({ creation, onRespond: (value) => commands.push(value), renderText: (text) => text })
+  const html = renderToStaticMarkup(panel)
+  assert.doesNotMatch(html, /RAW AGE MENU/)
+  assert.match(html, /<dt>Dexterity<\/dt><dd>\+2<\/dd>/)
+  assert.match(html, /<button[^>]*>Choose Adolescent<\/button>/)
+})
+
+test('writing editors preload text and save through the dedicated editor action', () => {
+  for (const state of [11, 60, 66, 68, 70, 72, 74]) {
+    submitted = false
+    const edits = []
+    const creation = step({ step: 'editor', state, canBack: false, title: 'Bonds', editorText: 'First line\r\n/s is literal', editorMaxBytes: 4000, body: 'RAW EDITOR HELP', choices: [] })
+    const panel = context.CharacterCreationPanel({ creation, onRespond() { assert.fail('editor content must not be sent as commands') }, onEdit: (...args) => edits.push(args), renderText: (text) => text })
+    const html = renderToStaticMarkup(panel)
+    assert.match(html, /First line\n\/s is literal/)
+    assert.doesNotMatch(html, /RAW EDITOR HELP/)
+    const form = panel.props.children.find((child) => child?.type === 'form')
+    form.props.onSubmit({ preventDefault() {} })
+    assert.deepEqual(edits, [['save', 'First line\n/s is literal']])
   }
 })

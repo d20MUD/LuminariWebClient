@@ -3635,7 +3635,7 @@ function App() {
 
       {selectedMudId === 'krynn' && isCreationOpen ? <WebOutputModal title="Create your Krynn character" titleId="character-creation-title" closeLabel="Minimize character creation"
         className={`character-creation-modal${creationStep?.step === 'race' || creationStep?.step === 'class' ? ' character-creation-modal-grid' : ''}`} onClose={() => { setIsCreationOpen(false); creationOpenRef.current = false }}>
-        {creationStep ? <CharacterCreationPanel key={creationStep.id} creation={creationStep} onRespond={sendInputLine} renderText={renderWebTextBlocks} renderInfo={renderCreationInfo} />
+        {creationStep ? <CharacterCreationPanel key={creationStep.id} creation={creationStep} onRespond={sendInputLine} onEdit={(action, text) => sendMessage({ type: 'creation-editor', action, text })} renderText={renderWebTextBlocks} renderInfo={renderCreationInfo} />
           : <div className="creation-waiting"><p role="status">{status === 'error' ? statusDetail : 'Signing in to your account…'}</p><p>The name step will appear once the account is authenticated.</p>
             <button type="button" onClick={() => { creationConnectPendingRef.current = false; sendMessage({ type: 'disconnect' }); setIsCreationOpen(false); creationOpenRef.current = false; setIsAutoLoginDialogOpen(true) }}>Back to saved characters</button></div>}
       </WebOutputModal> : null}

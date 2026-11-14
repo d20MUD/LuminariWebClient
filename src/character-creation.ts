@@ -1,9 +1,9 @@
 import type { MudValue } from '../shared/mud.ts'
 
-export type CreationChoice = { value: string; label: string; description: string }
+export type CreationChoice = { value: string; label: string; description: string; adjustments?: { ability: string; modifier: number }[] }
 export type CreationStep = {
   id: string; active: boolean; canBack: boolean; step: string; state: number; title: string; name: string;
-  body: string; truncated: boolean; choices: CreationChoice[]
+  body: string; truncated: boolean; choices: CreationChoice[]; descriptionPreview?: string; editorText?: string; editorMaxBytes?: number; editorBusy?: boolean; editorError?: boolean
 }
 
 export function parseCreationStep(value: MudValue | undefined): CreationStep | null {
@@ -16,10 +16,18 @@ export function parseCreationStep(value: MudValue | undefined): CreationStep | n
     if (!choice || typeof choice !== 'object') return []
     const item = choice as Record<string, unknown>
     if (typeof item.value !== 'string' || /[\r\n]/.test(item.value) || typeof item.label !== 'string') return []
-    return [{ value: item.value, label: item.label, description: typeof item.description === 'string' ? item.description : '' }]
+    return [{ value: item.value, label: item.label, description: typeof item.description === 'string' ? item.description : '', adjustments: Array.isArray(item.adjustments) ? item.adjustments.flatMap((value) => {
+      if (!value || typeof value !== 'object') return []
+      const adjustment = value as Record<string, unknown>
+      return typeof adjustment.ability === 'string' && typeof adjustment.modifier === 'number' && Number.isFinite(adjustment.modifier) ? [{ ability: adjustment.ability, modifier: adjustment.modifier }] : []
+    }) : undefined }]
   })
   return { id: record.id, active: record.active, canBack: record.canBack === true, step: record.step, state: typeof record.state === 'number' ? record.state : -1,
     title: typeof record.title === 'string' ? record.title : 'Character creation', name: typeof record.name === 'string' ? record.name : '',
+    editorText: typeof record.editorText === 'string' ? record.editorText : undefined,
+    editorMaxBytes: typeof record.editorMaxBytes === 'number' ? record.editorMaxBytes : undefined,
+    editorBusy: record.editorBusy === true, editorError: record.editorError === true,
+    descriptionPreview: typeof record.descriptionPreview === 'string' ? record.descriptionPreview : undefined,
     body: record.body, truncated: record.truncated === true, choices }
 }
 
