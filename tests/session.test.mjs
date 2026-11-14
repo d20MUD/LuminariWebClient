@@ -290,3 +290,20 @@ test('Krynn history restoration does not send commands to Star Wars', () => {
   session.parser.callbacks.onMsdp('CHARACTER_NAME', 'Test')
   assert.deepEqual(sockets[0].writes, [])
 })
+
+
+test('Krynn clan report is restored after copyover and stale identity data is cleared', () => {
+  const { session, sockets, messages } = fixture()
+  session.updateMsdpVariables({ clanProgress: 'CLAN_PROGRESS' }, false)
+  session.parser.callbacks.onMsdpReady()
+  session.state.clanProgress = { status: 'ready', clan: { name: 'old clan' } }
+  session.parser.callbacks.onMsdpReady()
+  const packets = sockets[0].writes.filter(Buffer.isBuffer).map((b) => b.toString('utf8'))
+  assert.equal(packets.filter((p) => p.includes('REPORT\x02CLAN_PROGRESS')).length, 2)
+  assert.equal(packets.filter((p) => p.includes('SEND\x02CLAN_PROGRESS')).length, 2)
+  assert.equal(session.state.clanProgress, null)
+  assert.ok(messages.some((m) => m.type === 'state' && m.state.clanProgress === null))
+  session.state.clanProgress = { status: 'ready' }
+  session.parser.callbacks.onMsdp('CHARACTER_NAME', 'DifferentCharacter')
+  assert.equal(session.state.clanProgress, null)
+})

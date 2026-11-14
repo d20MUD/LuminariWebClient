@@ -569,3 +569,16 @@ test('blocked unfinished quests keep the indicator and explain why joining is di
   assert.doesNotMatch(text, /To join: quest webjoin 1005 900/)
   assert.match(text, /To join: quest webjoin 1005 901/)
 })
+
+
+test('help usage blocks retain command line breaks without stopping prose reflow', () => {
+  const body = 'WEAPON SPECIAL EFFECTS\r\n\r\n  help weaponeffects\r\n  help weapon effects\r\n  help clanquartermaster\r\n  clan quartermaster inspect <weapon>\r\n\r\n  This guide describes\r\nthe weapon effects.'
+  const expected = 'help weaponeffects\nhelp weapon effects\nhelp clanquartermaster\nclan quartermaster inspect <weapon>'
+  assert.ok(context.reflowModalText(body).includes(expected))
+  assert.match(context.reflowModalText(body), /This guide describes the weapon effects\./)
+  const help = { id: 'usage', topic: 'weaponeffects', body, truncated: false }
+  const html = renderToStaticMarkup(React.createElement(context.HelpInfoModal, { help, onClose() {} }))
+  assert.ok(html.includes(expected.replace('<weapon>', '&lt;weapon&gt;')))
+  assert.doesNotMatch(html, /<weapon>/)
+  assert.equal(context.reflowModalText('  \tRhelp first\tn\n  help second').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''), 'help first\nhelp second')
+})

@@ -93,3 +93,69 @@ test('Room contents tab is enabled by default for Krynn only and remains configu
   settings.layout.sidebarTabs.roomContents = false
   assert.equal(visible(false, true).includes('roomContents'), false)
 })
+
+
+test('Clan panel defaults and saved layout remain scoped to Krynn', () => {
+  const settings = context.normalizeClientSettings({ terminal: {} })
+  assert.equal(settings.layout.sidebarTabs.clan, true)
+  const visible = (starwars,krynn) => [...context.getVisibleSidebarTabs(settings.layout,starwars,krynn)].map((tab)=>tab.id)
+  assert.equal(visible(false,true).includes('clan'),true)
+  assert.equal(visible(false,false).includes('clan'),false)
+  assert.equal(visible(true,false).includes('clan'),false)
+  settings.layout.sidebarTabs.clan=false
+  assert.equal(visible(false,true).includes('clan'),false)
+})
+
+test('surveyed harvest nodes are room-scoped and offer only the normal Harvest command', () => {
+  const node = { kind: 'harvest', target: '}h1005', name: 'an ice-rimed copper vein' }
+  const value = { room: 1005, entries: [node] }
+  const parsed = context.parseRoomContents(value)
+  assert.equal(parsed.entries.length, 1)
+  assert.deepEqual([...context.roomEntityActions(parsed.entries[0])].map((action) => action.label), ['Harvest'])
+  const invalid = context.parseRoomContents({ room: 1005, entries: [
+    { ...node, target: '}h1006' }, { ...node, target: '}h1005\nquit' },
+    { ...node, target: 'harvest;quit' }, { ...node, target: '}o1005' },
+  ] })
+  assert.equal(invalid.entries.length, 0)
+  let selected = null
+  const commands = []
+  context.useState = () => [selected, (value) => { selected = value }]
+  const props = { value, currentRoom: 1005, connected: true, onAction: (command) => commands.push(command) }
+  let panel = context.RoomContentsPanel(props)
+  const html = renderToStaticMarkup(panel)
+  assert.match(html, /Harvesting/)
+  assert.match(html, /an ice-rimed copper vein/)
+  assert.match(html, /room-entity-harvest/)
+  assert.match(html, /font-size:clamp/)
+  const nodeButton = panel.props.children[3].props.children[1].props.children[0].props.children[0]
+  nodeButton.props.onClick()
+  assert.equal(selected, '}h1005')
+  panel = context.RoomContentsPanel(props)
+  const actions = panel.props.children[3].props.children[1].props.children[0].props.children[1].props.children
+  assert.equal(actions.length, 1)
+  actions[0].props.onClick()
+  assert.deepEqual(commands, ['harvest'])
+  assert.equal(selected, null)
+  // Survey expiry or depletion removes the selected node on the next report.
+  selected = '}h1005'
+  context.RoomContentsPanel({ ...props, value: { room: 1005, entries: [] } })
+  assert.equal(selected, null)
+  selected = '}h1005'
+  context.RoomContentsPanel({ ...props, currentRoom: 1006, value: { room: 1006, entries: [{ ...node, target: '}h1006' }] } })
+  assert.equal(selected, null)
+  selected = '}h1005'
+  context.RoomContentsPanel({ ...props, connected: false })
+  assert.equal(selected, null)
+})
+
+test('harvest node labels remain on one line and preserve the full name as a tooltip', () => {
+  context.useState = () => [null, () => {}]
+  const name = 'the tracks of a mountain sheep (high-grade hide) <script>'
+  const html = renderToStaticMarkup(context.RoomContentsPanel({ value: { room: 1005, entries: [
+    { kind: 'harvest', target: '}h1005', name },
+  ] }, currentRoom: 1005, connected: true, onAction() {} }))
+  assert.doesNotMatch(html, /<script>/)
+  assert.match(html, /title="the tracks of a mountain sheep/)
+  const css = readFileSync(new URL('../src/App.css', import.meta.url), 'utf8')
+  assert.match(css, /\.room-entity-harvest\s*\{[^}]*white-space:\s*nowrap/)
+})

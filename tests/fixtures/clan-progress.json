@@ -1,0 +1,680 @@
+{
+  "version": 1,
+  "server_time": 2200000001,
+  "status": "ready",
+  "reason": "",
+  "clan": {
+    "uid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "name": "Clan '7",
+    "level": 8,
+    "xp_eighths": "44800",
+    "influence_eighths": "24000",
+    "revision": "1",
+    "next_level_xp_eighths": "57600"
+  },
+  "favor": {
+    "eighths": "801",
+    "standing": "Recognized",
+    "next_standing_eighths": "4000"
+  },
+  "contribution": {
+    "week_ends_at": 2200003200,
+    "base_xp_eighths": "0",
+    "full_xp_eighths": "4800",
+    "half_xp_eighths": "9600",
+    "favor_eighths": "0",
+    "favor_cap_eighths": "4800",
+    "sources": [
+      {
+        "id": 1,
+        "name": "Kills",
+        "used": "0",
+        "limit": 200
+      },
+      {
+        "id": 2,
+        "name": "Supply orders",
+        "used": "0",
+        "limit": 3
+      },
+      {
+        "id": 3,
+        "name": "Deliveries",
+        "used": "0",
+        "limit": 2
+      },
+      {
+        "id": 4,
+        "name": "Gathering",
+        "used": "0",
+        "limit": 2
+      },
+      {
+        "id": 5,
+        "name": "Bounties",
+        "used": "0",
+        "limit": 2
+      },
+      {
+        "id": 6,
+        "name": "Expeditions",
+        "used": "0",
+        "limit": 2
+      }
+    ]
+  },
+  "buffs": [
+    {
+      "family": 1,
+      "name": "Scholar's Encouragement",
+      "category": "growth",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "The expected active buff changed; refresh before replacing it."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 2,
+      "name": "Arcane Readiness",
+      "category": "recovery",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "The expected active buff changed; refresh before replacing it."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 3,
+      "name": "Psionic Focus",
+      "category": "recovery",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "The expected active buff changed; refresh before replacing it."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 4,
+      "name": "Company Vitality",
+      "category": "combat",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "The expected active buff changed; refresh before replacing it."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 5,
+      "name": "Artisan's Guidance",
+      "category": "craft",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "The expected active buff changed; refresh before replacing it."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 3,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 2,
+              "enabled": true,
+              "replace_activation_uid": "",
+              "reasons": []
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "next_unlocks": [
+    {
+      "level": 10,
+      "name": "Third buff slot"
+    },
+    {
+      "level": 20,
+      "name": "Scholar's Encouragement tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Arcane Readiness tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Psionic Focus tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Company Vitality tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Artisan's Guidance tier 3"
+    }
+  ],
+  "character_id": "5000000007",
+  "buff_state_available": true,
+  "may_manage": true,
+  "slots_total": 2,
+  "slots_used": 0,
+  "combat_used": 0,
+  "content": {
+    "version": 1,
+    "context_ready": false,
+    "contracts": [
+      {
+        "ready": false,
+        "choices": [],
+        "actions": [],
+        "reasons": [],
+        "notes": [],
+        "family": "delivery",
+        "completed_ids": []
+      },
+      {
+        "ready": false,
+        "choices": [],
+        "actions": [],
+        "reasons": [],
+        "notes": [],
+        "family": "gathering",
+        "completed_ids": []
+      },
+      {
+        "ready": false,
+        "choices": [],
+        "actions": [],
+        "reasons": [],
+        "notes": [],
+        "family": "bounty",
+        "completed_ids": []
+      }
+    ],
+    "expedition": {
+      "ready": false,
+      "choices": [],
+      "actions": [],
+      "reasons": [],
+      "notes": []
+    },
+    "quartermaster": {
+      "ready": false,
+      "choices": [],
+      "actions": [],
+      "reasons": [],
+      "notes": [],
+      "purchase_pending": false
+    },
+    "weekly_xp_eighths": 0,
+    "weekly_influence_eighths": 0
+  }
+}

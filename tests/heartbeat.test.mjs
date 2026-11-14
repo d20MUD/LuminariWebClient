@@ -14,7 +14,8 @@ function extract(source, name) {
 function serverFixture() {
   let now = 0, tick, cleared = false
   const socket = new EventEmitter()
-  Object.assign(socket, { readyState: 1, pings: 0, terminations: 0,
+  Object.assign(socket, { readyState: 1, pings: 0, terminations: 0, sent: [],
+    send(text) { this.sent.push(JSON.parse(text)) },
     ping() { this.pings++ }, terminate() { this.terminations++ } })
   const context = vm.createContext({ WebSocket: { OPEN: 1 }, Date: { now: () => now },
     WEB_SOCKET_PING_INTERVAL_MS: 15_000, WEB_SOCKET_PONG_TIMEOUT_MS: 90_000,
@@ -28,12 +29,14 @@ function serverFixture() {
 
 test('idle sockets remain connected through automatic pong replies', () => {
   const f = serverFixture()
-  for (let time = 15_000; time <= 600_000; time += 15_000) {
+  for (let time = 15_000; time <= 1_800_000; time += 15_000) {
     f.tickAt(time)
     f.socket.emit('pong')
   }
   assert.equal(f.socket.terminations, 0)
-  assert.equal(f.socket.pings, 40)
+  assert.equal(f.socket.pings, 120)
+  assert.equal(f.socket.sent.length, 120)
+  assert.ok(f.socket.sent.every((message) => message.type === 'heartbeat' && Object.keys(message).length === 1))
 })
 
 test('browser heartbeat or commands prove liveness even without control pongs', () => {

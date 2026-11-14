@@ -26,6 +26,7 @@ import type { TerminalScrollController } from './terminal-scroll.ts'
 import { CharacterCreationPanel } from './CharacterCreation.tsx'
 import { parseCreationStep } from './character-creation.ts'
 import type { CreationStep } from './character-creation.ts'
+import { ClanPanel } from './ClanPanel.tsx'
 import './App.css'
 
 const appSettings = getAppSettings(import.meta.env.DEV)
@@ -153,7 +154,7 @@ type BarConfig = {
   widthValue: string
 }
 
-type SidebarTabId = 'roomContents' | 'character' | 'gear' | 'quests' | 'group' | 'affects'
+type SidebarTabId = 'clan' | 'roomContents' | 'character' | 'gear' | 'quests' | 'group' | 'affects'
 
 type MapPanelTabId = 'graphic' | 'graphicLegend' | 'ascii' | 'asciiLegend'
 
@@ -354,6 +355,7 @@ const DEFAULT_LAYOUT_MAP_PANELS: Record<MapPanelTabId, boolean> = {
 }
 
 const DEFAULT_LAYOUT_SIDEBAR_TABS: Record<SidebarTabId, boolean> = {
+  clan: true,
   roomContents: true,
   character: true,
   gear: true,
@@ -579,6 +581,7 @@ const MSDP_VARIABLE_GROUPS: Array<{
 
 const SIDEBAR_TABS: SidebarTab[] = [
   { id: 'character', label: 'Player info' },
+  { id: 'clan', label: 'Clan' },
   { id: 'gear', label: 'Gear' },
   { id: 'quests', label: 'Quests' },
   { id: 'roomContents', label: 'Room contents' },
@@ -594,6 +597,7 @@ const LAYOUT_MAP_TOGGLE_OPTIONS: Array<{ id: MapPanelTabId; label: string }> = [
 ]
 
 const LAYOUT_SIDEBAR_TOGGLE_OPTIONS: Array<{ id: SidebarTabId; label: string }> = [
+  { id: 'clan', label: 'Clan tab' },
   { id: 'roomContents', label: 'Room contents tab' },
   { id: 'character', label: 'Player info tab' },
   { id: 'gear', label: 'Gear tab' },
@@ -990,7 +994,7 @@ function App() {
 
       socket.addEventListener('message', (event) => {
         const message = parseServerMessage(event.data)
-        if (!message) {
+        if (!message || message.type === 'heartbeat') {
           return
         }
 
@@ -1137,7 +1141,7 @@ function App() {
           if (clientSettingsRef.current.windows.help) setHelpModal(helpResponse)
           else appendWindowOutput(formatTextWindowOutput(helpResponse, 'Help'))
         }
-        setMudState((current) => ({ ...current, ...message.state }))
+        setMudState((current) => ({ ...current, ...message.state, ...('clanProgress' in message.state ? { clanProgressReceivedAt: Date.now() } : {}) }))
       })
     }
 
@@ -2197,6 +2201,7 @@ function App() {
           asciiLegend: visible,
         },
         sidebarTabs: {
+          clan: visible,
           roomContents: visible,
           character: visible,
           gear: visible,
@@ -3944,6 +3949,8 @@ function App() {
                     </>
                   ) : null}
 
+                  {resolvedActiveSidebarTab === 'clan' && selectedMudId === 'krynn' ? <ClanPanel key={mudState.characterName ?? ''} value={mudState.clanProgress} receivedAt={mudState.clanProgressReceivedAt} connected={connected} onAction={sendInputLine} /> : null}
+
                   {resolvedActiveSidebarTab === 'roomContents' && selectedMudId === 'krynn' ? <RoomContentsPanel value={mudState.roomContents} currentRoom={mudState.roomVnum} connected={connected} onAction={sendInputLine} /> : null}
 
                   {resolvedActiveSidebarTab === 'gear' ? <GearPanel value={mudState.gear} /> : null}
@@ -4493,6 +4500,7 @@ function normalizeClientSettings(value: unknown, emptyStateMessage?: string): Cl
             : DEFAULT_CLIENT_SETTINGS.layout.mapPanels.asciiLegend,
       },
       sidebarTabs: {
+        clan: typeof layoutSidebarTabsRecord?.clan === 'boolean' ? layoutSidebarTabsRecord.clan : true,
         roomContents: typeof layoutSidebarTabsRecord?.roomContents === 'boolean' ? layoutSidebarTabsRecord.roomContents : true,
         character:
           typeof layoutSidebarTabsRecord?.character === 'boolean'
@@ -5048,7 +5056,7 @@ function getCustomMudOptionLabel(settings: ClientSettings) {
 }
 
 function getVisibleSidebarTabs(layoutSettings: ClientSettings['layout'], isStarWarsConnection: boolean, isKrynnConnection = false) {
-  return SIDEBAR_TABS.filter((tab) => (isStarWarsConnection || tab.id !== 'gear') && (isKrynnConnection || tab.id !== 'roomContents') && layoutSettings.sidebarTabs[tab.id])
+  return SIDEBAR_TABS.filter((tab) => (isStarWarsConnection || tab.id !== 'gear') && (isKrynnConnection || (tab.id !== 'roomContents' && tab.id !== 'clan')) && layoutSettings.sidebarTabs[tab.id])
 }
 
 function getDefaultSidebarTab(settings: ClientSettings, isStarWarsConnection: boolean): SidebarTabId {
@@ -5933,7 +5941,7 @@ function QuestDetailsModal({ quest, onClose }: { quest: QuestEntry; onClose: () 
   )
 }
 
-type RoomEntity = { target: string; name: string; kind: 'mob' | 'object' | 'player'; takeable: boolean }
+type RoomEntity = { target: string; name: string; kind: 'mob' | 'object' | 'player' | 'harvest'; takeable: boolean }
 type RoomContents = { room: number; entries: RoomEntity[] }
 
 function parseRoomContents(value: MudValue | undefined): RoomContents | null {
@@ -5941,15 +5949,16 @@ function parseRoomContents(value: MudValue | undefined): RoomContents | null {
   const parsed = normalizeQuestValue(value)
   if (!isMudRecord(parsed) || typeof parsed.room !== 'number' || !Number.isSafeInteger(parsed.room) || !Array.isArray(parsed.entries)) return null
   const entries = parsed.entries.flatMap((entry): RoomEntity[] => {
-    if (!isMudRecord(entry) || !['mob', 'object', 'player'].includes(String(entry.kind)) || typeof entry.name !== 'string' || typeof entry.target !== 'string') return []
+    if (!isMudRecord(entry) || !['mob', 'object', 'player', 'harvest'].includes(String(entry.kind)) || typeof entry.name !== 'string' || typeof entry.target !== 'string') return []
     const kind = entry.kind as RoomEntity['kind']
-    if (!(kind === 'object' ? /^}o[1-9][0-9]*$/ : /^}c[1-9][0-9]*$/).test(entry.target)) return []
+    if (kind === 'harvest' ? entry.target !== `}h${parsed.room}` : !(kind === 'object' ? /^}o[1-9][0-9]*$/ : /^}c[1-9][0-9]*$/).test(entry.target)) return []
     return [{ target: entry.target, name: entry.name, kind, takeable: kind === 'object' && entry.takeable === true }]
   })
   return { room: parsed.room, entries }
 }
 
 function roomEntityActions(entity: RoomEntity): { label: string; command: string }[] {
+  if (entity.kind === 'harvest') return [{ label: 'Harvest', command: 'harvest' }]
   if (entity.kind === 'mob') return [{ label: 'Attack', command: 'kill' }, { label: 'Fire', command: 'fire' }, { label: 'Lore', command: 'lore' }, { label: 'Look', command: 'look' }]
   if (entity.kind === 'player') return [{ label: 'Look', command: 'look' }]
   return [{ label: 'Look', command: 'look' }, { label: 'Examine', command: 'examine' }, { label: 'Read', command: 'read' }, ...(entity.takeable ? [{ label: 'Get', command: 'get' }] : [])]
@@ -5964,18 +5973,20 @@ function RoomContentsPanel({ value, currentRoom, connected, onAction }: {
   const selectedEntity = valid ? contents.entries.find((entry) => entry.target === selected) : undefined
   if (selected !== null && !selectedEntity) setSelected(null)
   if (!valid || !contents) return <EmptyTabMessage message="Waiting for current room contents…" />
-  if (!contents.entries.length) return <EmptyTabMessage message="No visible mobs, objects, or other players in this room." />
+  if (!contents.entries.length) return <EmptyTabMessage message="No visible creatures, objects, players, or harvest nodes in this room." />
   return <div className="room-contents-list">
-    {(['mob', 'object', 'player'] as const).map((kind) => {
+    {(['mob', 'object', 'player', 'harvest'] as const).map((kind) => {
       const entries = contents.entries.filter((entry) => entry.kind === kind)
       if (!entries.length) return null
-      return <section key={kind} aria-label={kind === 'mob' ? 'Mobs' : kind === 'object' ? 'Objects' : 'Players'}>
-        <h3>{kind === 'mob' ? 'Mobs' : kind === 'object' ? 'Objects' : 'Players'}</h3>
+      return <section key={kind} aria-label={kind === 'mob' ? 'Mobs' : kind === 'object' ? 'Objects' : kind === 'harvest' ? 'Harvesting' : 'Players'}>
+        <h3>{kind === 'mob' ? 'Mobs' : kind === 'object' ? 'Objects' : kind === 'harvest' ? 'Harvesting' : 'Players'}</h3>
         <ul>{entries.map((entry) => <li key={entry.target}>
-          <button type="button" className="room-entity-name" aria-expanded={selected === entry.target}
+          <button type="button" className={`room-entity-name${kind === 'harvest' ? ' room-entity-harvest' : ''}`} aria-expanded={selected === entry.target}
+            title={stripMudFormatting(entry.name)}
+            style={kind === 'harvest' ? { fontSize: `clamp(0.7rem, calc((100cqi - 1.5rem) / ${Math.max(1, stripMudFormatting(entry.name).length)} * 1.6), 0.9rem)` } : undefined}
             onClick={() => setSelected(selected === entry.target ? null : entry.target)} dangerouslySetInnerHTML={{ __html: renderMudHtml(entry.name) }} />
           {selected === entry.target ? <div className="room-entity-actions" aria-label={`Actions for ${stripMudFormatting(entry.name)}`}>
-            {roomEntityActions(entry).map((action) => <button type="button" key={action.command} onClick={() => { onAction(`${action.command} ${entry.target}`); setSelected(null) }}>{action.label}</button>)}
+            {roomEntityActions(entry).map((action) => <button type="button" key={action.command} onClick={() => { onAction(entry.kind === 'harvest' ? 'harvest' : `${action.command} ${entry.target}`); setSelected(null) }}>{action.label}</button>)}
           </div> : null}
         </li>)}</ul>
       </section>
@@ -6201,6 +6212,20 @@ function reflowModalText(body: string): string {
   const lines = clean.split('\n').filter((line) => !/^[-=_+~]{5,}$/.test(line.replace(ANSI_ESCAPE_PATTERN, '').trim()))
   const plainLine = (line: string) => line.replace(ANSI_ESCAPE_PATTERN, '').trim()
   const isBlank = (line: string) => plainLine(line).length === 0
+  // Keep indented command examples separate. Indented prose still reflows
+  // normally, including legacy help files that indent every wrapped line.
+  const formattedLines = new Set<number>()
+  for (let start = 0; start < lines.length;) {
+    if (isBlank(lines[start])) { start++; continue }
+    let end = start
+    while (end < lines.length && !isBlank(lines[end])) end++
+    const block = lines.slice(start, end)
+    const hasUsage = block.some((line) => /^(?:help\s+|clan\s+|(?:syntax|usage)\s*:)|<[a-z][^<>]*>/i.test(plainLine(line)))
+    if (end - start > 1 && hasUsage && block.every((line) => /^[ \t]{2,}\S/.test(line.replace(ANSI_ESCAPE_PATTERN, '')))) {
+      for (let index = start; index < end; index++) formattedLines.add(index)
+    }
+    start = end
+  }
   // Keep list items separate, including the creator's "Ability: - bonus"
   // format. Wrapped continuation lines still flow with their own item.
   const startsListItem = (line: string) => /^(?:[-*•]\s+|\d+[.)]\s+|[^:]+:\s*-\s+)/.test(plainLine(line))
@@ -6224,7 +6249,7 @@ function reflowModalText(body: string): string {
     const trimmed = line.replace(/^[ \t]+|[ \t]+$/g, '')
     const text = racialAbilities ? trimmed.replace(/[ \t]+/g, ' ') : trimmed
     if (index === lines.length - 1) return text
-    return text + (!isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !(isFeatHelp && startsFeatField(lines[index + 1])) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
+    return text + (!formattedLines.has(index) && !isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !(isFeatHelp && startsFeatField(lines[index + 1])) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
   }).join('')
 }
 

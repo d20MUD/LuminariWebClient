@@ -1,3 +1,4 @@
+import { parseClanProgress } from '../shared/clan-progress.ts'
 import express from 'express'
 import net from 'node:net'
 import path from 'node:path'
@@ -139,6 +140,9 @@ function startWebSocketHeartbeat(socket: WebSocket) {
     }
     try {
       socket.ping()
+      // Some intermediaries only refresh their idle timeout for application
+      // data. Send downstream traffic even when background-tab timers pause.
+      socket.send(JSON.stringify({ type: 'heartbeat' } satisfies ServerMessage))
     } catch (error) {
       console.warn('Web client heartbeat failed:', error)
       socket.terminate()
@@ -274,10 +278,13 @@ class MudSession {
         }
       },
       onMsdp: (variable, value) => {
+        if (variable.trim().toUpperCase() === this.msdpVariables.clanProgress?.trim().toUpperCase() && !this.isKrynnConnection) return
         // CHARACTER_NAME is published by Krynn only in CON_PLAYING. TCP
         // connection and account/menu prompts are too early for game commands.
         if (this.isKrynnConnection && variable.toUpperCase() === 'CHARACTER_NAME' &&
             typeof value === 'string' && value.trim() && this.chatHistoryCharacter !== value) {
+          this.state.clanProgress = null
+          this.send({ type: 'state', state: { clanProgress: null } })
           this.chatHistoryCharacter = value
           this.send({ type: 'chat', text: '', reset: true })
           this.sendAutoLoginInput('history all')
@@ -307,6 +314,10 @@ class MudSession {
           return
         }
 
+        if (this.isKrynnConnection) {
+          this.state.clanProgress = null
+          this.send({ type: 'state', state: { clanProgress: null } })
+        }
         this.msdpInitialized = true
         const initialize = () => {
           this.msdpInitializationTimer = null
@@ -492,7 +503,7 @@ class MudSession {
       return
     }
 
-    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode, this.helpModalsEnabled)) {
+    for (const variable of getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode, this.helpModalsEnabled, this.isKrynnConnection)) {
       this.sendMsdpPair('SEND', variable)
     }
   }
@@ -533,7 +544,7 @@ class MudSession {
   }
 
   private applyMsdpConfiguration() {
-    const variables = getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode, this.helpModalsEnabled)
+    const variables = getConfiguredMsdpVariables(this.msdpVariables, this.starWarsMode, this.helpModalsEnabled, this.isKrynnConnection)
 
     if (!this.starWarsMode) {
       for (const variable of variables) {
@@ -1327,9 +1338,10 @@ function normalizeScalar(value: string): MudValue {
   return value
 }
 
-function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean, helpModalsEnabled = false) {
+function getConfiguredMsdpVariables(msdpVariables: MsdpVariableMap, starWarsMode: boolean, helpModalsEnabled = false, clanEnabled = false) {
   const variables = new Set(
     Object.entries(msdpVariables)
+      .filter(([key]) => key !== 'clanProgress' || (clanEnabled && !starWarsMode))
       .filter(([key]) => !['helpInfo', 'lootInfo', 'loreInfo', 'scoreInfo', 'whoInfo', 'questComplete', 'questHistory', 'questAccepted', 'roomQuests', 'roomContents', 'characterCreation', 'ammoStatus'].includes(key) || helpModalsEnabled)
       .filter(([key]) => starWarsMode || !starWarsMsdpVariableKeys.includes(key as (typeof starWarsMsdpVariableKeys)[number]))
       .map(([, value]) => value.trim())
@@ -1494,6 +1506,9 @@ function mapMsdpUpdate(variable: string, value: MudValue, msdpVariables: MsdpVar
       break
     case 'roomContents':
       partial.roomContents = value
+      break
+    case 'clanProgress':
+      partial.clanProgress = parseClanProgress(value) as unknown as MudValue
       break
     case 'ammoStatus':
       partial.ammoStatus = value

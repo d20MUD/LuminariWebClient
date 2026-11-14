@@ -1,0 +1,1528 @@
+{
+  "version": 1,
+  "server_time": 2200000001,
+  "status": "ready",
+  "reason": "",
+  "clan": {
+    "uid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "name": "Clan '7",
+    "level": 8,
+    "xp_eighths": "44800",
+    "influence_eighths": "22400",
+    "revision": "3",
+    "next_level_xp_eighths": "57600"
+  },
+  "favor": {
+    "eighths": "12000",
+    "standing": "Proven",
+    "next_standing_eighths": "28000"
+  },
+  "contribution": {
+    "week_ends_at": 2200003200,
+    "base_xp_eighths": "800",
+    "full_xp_eighths": "4800",
+    "half_xp_eighths": "9600",
+    "favor_eighths": "400",
+    "favor_cap_eighths": "4800",
+    "sources": [
+      {
+        "id": 1,
+        "name": "Kills",
+        "used": "2",
+        "limit": 200
+      },
+      {
+        "id": 2,
+        "name": "Supply orders",
+        "used": "1",
+        "limit": 3
+      },
+      {
+        "id": 3,
+        "name": "Deliveries",
+        "used": "1",
+        "limit": 2
+      },
+      {
+        "id": 4,
+        "name": "Gathering",
+        "used": "1",
+        "limit": 2
+      },
+      {
+        "id": 5,
+        "name": "Bounties",
+        "used": "1",
+        "limit": 2
+      },
+      {
+        "id": 6,
+        "name": "Expeditions",
+        "used": "1",
+        "limit": 2
+      }
+    ]
+  },
+  "buffs": [
+    {
+      "family": 1,
+      "name": "Scholar's Encouragement",
+      "category": "growth",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "Buff-management permission is required.",
+          "The expected active buff changed; refresh before replacing it.",
+          "Stored clan or buff state is invalid."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 2,
+      "name": "Arcane Readiness",
+      "category": "recovery",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "Buff-management permission is required.",
+          "The expected active buff changed; refresh before replacing it.",
+          "Stored clan or buff state is invalid."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 3,
+      "name": "Psionic Focus",
+      "category": "recovery",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "Buff-management permission is required.",
+          "The expected active buff changed; refresh before replacing it.",
+          "Stored clan or buff state is invalid."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 4,
+      "name": "Company Vitality",
+      "category": "combat",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "Buff-management permission is required.",
+          "The expected active buff changed; refresh before replacing it.",
+          "Stored clan or buff state is invalid."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 1,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "family": 5,
+      "name": "Artisan's Guidance",
+      "category": "craft",
+      "active": false,
+      "cooling_down": false,
+      "tier": 0,
+      "slot": 0,
+      "expires_at": 0,
+      "next_available_at": 0,
+      "activation_uid": "",
+      "cancel": {
+        "enabled": false,
+        "reasons": [
+          "Buff-management permission is required.",
+          "The expected active buff changed; refresh before replacing it.",
+          "Stored clan or buff state is invalid."
+        ]
+      },
+      "tiers": [
+        {
+          "tier": 1,
+          "unlock_level": 3,
+          "cost_eighths": "800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 2,
+          "unlock_level": 5,
+          "cost_eighths": "1200",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        },
+        {
+          "tier": 3,
+          "unlock_level": 20,
+          "cost_eighths": "1800",
+          "slots": [
+            {
+              "slot": 1,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 2,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "Stored clan or buff state is invalid."
+              ]
+            },
+            {
+              "slot": 3,
+              "enabled": false,
+              "replace_activation_uid": "",
+              "reasons": [
+                "Buff-management permission is required.",
+                "The requested buff tier is locked by clan level.",
+                "The requested buff slot is not unlocked.",
+                "Stored clan or buff state is invalid."
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "next_unlocks": [
+    {
+      "level": 10,
+      "name": "Third buff slot"
+    },
+    {
+      "level": 20,
+      "name": "Scholar's Encouragement tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Arcane Readiness tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Psionic Focus tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Company Vitality tier 3"
+    },
+    {
+      "level": 20,
+      "name": "Artisan's Guidance tier 3"
+    }
+  ],
+  "character_id": "1007",
+  "buff_state_available": false,
+  "may_manage": false,
+  "slots_total": 2,
+  "slots_used": 0,
+  "combat_used": 0,
+  "content": {
+    "version": 1,
+    "context_ready": true,
+    "contracts": [
+      {
+        "ready": true,
+        "choices": [
+          {
+            "id": "ash-shafts-v1",
+            "name": "Ash shaft supplies",
+            "details": "50 units of ash, exact grade 1; clan level 1",
+            "actions": [
+              {
+                "kind": "delivery_accept",
+                "label": "Accept",
+                "id": "ash-shafts-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your delivery slot is occupied."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "arrows-v1",
+            "name": "Arrow reserves",
+            "details": "100 finite arrows shots, enhancement +0 or better; no infinite/Returning ammunition; clan level 1",
+            "actions": [
+              {
+                "kind": "delivery_accept",
+                "label": "Accept",
+                "id": "arrows-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your delivery slot is occupied."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bolts-v1",
+            "name": "Bolt reserves",
+            "details": "100 finite bolts shots, enhancement +0 or better; no infinite/Returning ammunition; clan level 1",
+            "actions": [
+              {
+                "kind": "delivery_accept",
+                "label": "Accept",
+                "id": "bolts-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your delivery slot is occupied."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "enchanted-bullets-v1",
+            "name": "Enchanted bullet reserves",
+            "details": "100 finite bullets shots, enhancement +1 or better; no infinite/Returning ammunition; clan level 6",
+            "actions": [
+              {
+                "kind": "delivery_accept",
+                "label": "Accept",
+                "id": "enchanted-bullets-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your delivery slot is occupied."
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "kind": "delivery_list",
+            "label": "List in text",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          },
+          {
+            "kind": "delivery_retry",
+            "label": "Retry recovery",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          },
+          {
+            "kind": "delivery_active",
+            "label": "Show saved contract",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          },
+          {
+            "kind": "delivery_turnin",
+            "label": "Preview turn-in",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          }
+        ],
+        "reasons": [],
+        "notes": [
+          "Base credit: 100 clan XP, 50 Influence and 50 Favor; account, clan weekly and balance caps can reduce credit.",
+          "Two different definitions per account and family each UTC week; each family has its own slot."
+        ],
+        "family": "delivery",
+        "completed_ids": [],
+        "active": {
+          "uid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "Ash shaft supplies",
+          "definition_id": "ash-shafts-v1",
+          "progress": 50,
+          "required": 50,
+          "expires_at": 2200003200,
+          "own_clan": true,
+          "state": "active",
+          "progress_label": "Eligible goods available"
+        },
+        "recovery_pending": false,
+        "preview": {
+          "summary": "Turn in goods for 100.000 clan XP, 50.000 Influence and 50.000 Favor.",
+          "expires_at": 2200000061,
+          "actions": [
+            {
+              "kind": "delivery_confirm",
+              "label": "Confirm turn-in",
+              "id": "11111111111111111111111111111111",
+              "enabled": true,
+              "reasons": []
+            }
+          ]
+        }
+      },
+      {
+        "ready": true,
+        "choices": [
+          {
+            "id": "fresh-ash-v1",
+            "name": "Fresh ash harvest",
+            "details": "20 fresh base harvest units; clan level 1, character levels 1-30",
+            "actions": [
+              {
+                "kind": "gathering_accept",
+                "label": "Accept",
+                "id": "fresh-ash-v1",
+                "enabled": false,
+                "reasons": [
+                  "This family's contract slot is occupied."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "fresh-maple-v1",
+            "name": "Fresh maple harvest",
+            "details": "20 fresh base harvest units; clan level 6, character levels 1-30",
+            "actions": [
+              {
+                "kind": "gathering_accept",
+                "label": "Accept",
+                "id": "fresh-maple-v1",
+                "enabled": false,
+                "reasons": [
+                  "This family's contract slot is occupied."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "copper-harvest-v1",
+            "name": "Fresh copper harvest",
+            "details": "20 fresh base harvest units; clan level 1, character levels 1-30",
+            "actions": [
+              {
+                "kind": "gathering_accept",
+                "label": "Accept",
+                "id": "copper-harvest-v1",
+                "enabled": false,
+                "reasons": [
+                  "This family's contract slot is occupied."
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "kind": "gathering_list",
+            "label": "List in text",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          },
+          {
+            "kind": "gathering_retry",
+            "label": "Retry recovery",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          },
+          {
+            "kind": "gathering_active",
+            "label": "Show saved contract",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          }
+        ],
+        "reasons": [],
+        "notes": [
+          "Base credit: 100 clan XP, 50 Influence and 50 Favor; account, clan weekly and balance caps can reduce credit.",
+          "Two different definitions per account and family each UTC week; each family has its own slot."
+        ],
+        "family": "gathering",
+        "completed_ids": [],
+        "active": {
+          "uid": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "Fresh ash harvest",
+          "definition_id": "fresh-ash-v1",
+          "progress": 7,
+          "required": 20,
+          "expires_at": 2200003200,
+          "own_clan": true,
+          "state": "active",
+          "progress_label": "Saved fresh base units"
+        }
+      },
+      {
+        "ready": true,
+        "choices": [
+          {
+            "id": "sewer-bandits-v1",
+            "name": "Hostile sewer bandits",
+            "details": "20 qualifying designated kills; clan level 1, character levels 3-12",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "sewer-bandits-v1",
+                "enabled": true,
+                "reasons": []
+              }
+            ]
+          },
+          {
+            "id": "black-rats-v1",
+            "name": "Large black rats",
+            "details": "20 qualifying designated kills; clan level 1, character levels 3-13",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "black-rats-v1",
+                "enabled": true,
+                "reasons": []
+              }
+            ]
+          },
+          {
+            "id": "grinning-bandits-v1",
+            "name": "Grinning bandits",
+            "details": "20 qualifying designated kills; clan level 1, character levels 12-22",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "grinning-bandits-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your character is outside the allowed level band."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "army-recruits-v1",
+            "name": "White Dragonarmy goblin recruits",
+            "details": "20 qualifying designated kills; clan level 1, character levels 13-23",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "army-recruits-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your character is outside the allowed level band."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "baaz-guards-v1",
+            "name": "Baaz Draconian guards",
+            "details": "20 qualifying designated kills; clan level 1, character levels 24-30",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "baaz-guards-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your character is outside the allowed level band."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bozak-guards-v1",
+            "name": "Bozak Draconian guards",
+            "details": "20 qualifying designated kills; clan level 1, character levels 24-30",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "bozak-guards-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your character is outside the allowed level band."
+                ]
+              }
+            ]
+          },
+          {
+            "id": "aurak-guards-v1",
+            "name": "Aurak Draconian guards",
+            "details": "20 qualifying designated kills; clan level 1, character levels 24-30",
+            "actions": [
+              {
+                "kind": "bounty_accept",
+                "label": "Accept",
+                "id": "aurak-guards-v1",
+                "enabled": false,
+                "reasons": [
+                  "Your character is outside the allowed level band."
+                ]
+              }
+            ]
+          }
+        ],
+        "actions": [
+          {
+            "kind": "bounty_list",
+            "label": "List in text",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          },
+          {
+            "kind": "bounty_retry",
+            "label": "Retry recovery",
+            "id": "",
+            "enabled": true,
+            "reasons": []
+          }
+        ],
+        "reasons": [],
+        "notes": [
+          "Base credit: 100 clan XP, 50 Influence and 50 Favor; account, clan weekly and balance caps can reduce credit.",
+          "Two different definitions per account and family each UTC week; each family has its own slot."
+        ],
+        "family": "bounty",
+        "completed_ids": []
+      }
+    ],
+    "expedition": {
+      "ready": true,
+      "choices": [
+        {
+          "id": "smugglers-assault-v1",
+          "name": "Stronghold Assault: Draconian smugglers",
+          "details": "20 defenders and two named objectives; clan level 1, character levels 5-10",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "smugglers-assault-v1",
+              "enabled": false,
+              "reasons": [
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "sewers-hunt-v1",
+          "name": "Regional Hunt: Sanction sewers and patrols",
+          "details": "10 kills in each of three categories; clan level 1, character levels 5-10",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "sewers-hunt-v1",
+              "enabled": false,
+              "reasons": [
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "eld-assault-v1",
+          "name": "Stronghold Assault: Eld Manor",
+          "details": "20 defenders and two named objectives; clan level 1, character levels 11-16",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "eld-assault-v1",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "eld-hunt-v1",
+          "name": "Regional Hunt: Eld spirits and Darken Wood",
+          "details": "10 kills in each of three categories; clan level 1, character levels 11-16",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "eld-hunt-v1",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "valley-assault-v1",
+          "name": "Stronghold Assault: Pristine Valley invaders",
+          "details": "20 defenders and two named objectives; clan level 1, character levels 17-22",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "valley-assault-v1",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "bugbear-hunt-v1",
+          "name": "Regional Hunt: Bugbears and draconian road patrols",
+          "details": "10 kills in each of three categories; clan level 1, character levels 17-22",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "bugbear-hunt-v1",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "icewall-approaches-assault-v1",
+          "name": "Stronghold Assault: Icewall approaches",
+          "details": "20 defenders and two named objectives; clan level 1, character levels 23-26",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "icewall-approaches-assault-v1",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "icewall-approaches-hunt-v1",
+          "name": "Regional Hunt: Icewall approach patrols",
+          "details": "10 kills in each of three categories; clan level 1, character levels 23-26",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "icewall-approaches-hunt-v1",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "icewall-assault-v2",
+          "name": "Stronghold Assault: Icewall Castle",
+          "details": "20 defenders and two named objectives; clan level 1, character levels 27-30",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "icewall-assault-v2",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        },
+        {
+          "id": "icewall-hunt-v2",
+          "name": "Regional Hunt: Icewall Castle and gate guards",
+          "details": "10 kills in each of three categories; clan level 1, character levels 27-30",
+          "actions": [
+            {
+              "kind": "expedition_create",
+              "label": "Create outing",
+              "id": "icewall-hunt-v2",
+              "enabled": false,
+              "reasons": [
+                "Your character is outside the allowed level band.",
+                "Your clan already has a recruiting or active outing."
+              ]
+            }
+          ]
+        }
+      ],
+      "actions": [
+        {
+          "kind": "expedition_list",
+          "label": "List in text",
+          "id": "",
+          "enabled": true,
+          "reasons": []
+        },
+        {
+          "kind": "expedition_claims",
+          "label": "Show completion claims",
+          "id": "",
+          "enabled": true,
+          "reasons": []
+        },
+        {
+          "kind": "expedition_active",
+          "label": "Check roster / manage in text",
+          "id": "",
+          "enabled": true,
+          "reasons": []
+        },
+        {
+          "kind": "expedition_join",
+          "label": "Join outing",
+          "id": "cccccccccccccccccccccccccccccccc",
+          "enabled": false,
+          "reasons": [
+            "You are already enrolled."
+          ]
+        }
+      ],
+      "reasons": [],
+      "notes": [
+        "Two to six enrolled accounts; meaningful contribution by at least two accounts per encounter. Personal completion needs half the counted objectives, rounded up, and the final objective.",
+        "Personal base: 100 Favor, once per account/family/UTC week. Shared base: 600 clan XP and 300 Influence once per clan/family/week. Caps can reduce credit."
+      ],
+      "claims": [],
+      "active": {
+        "uid": "cccccccccccccccccccccccccccccccc",
+        "name": "Stronghold Assault: Draconian smugglers",
+        "state": "recruiting",
+        "expires_at": 2200003200,
+        "sealed": false,
+        "leader": true,
+        "roster_count": 2,
+        "enrolled": true,
+        "removed": false,
+        "account_in_roster": true,
+        "personal_credit": 1,
+        "objectives": [
+          {
+            "progress": 1,
+            "required": 20,
+            "targets": [
+              "Designated target (Test area)",
+              "Designated target (Test area)",
+              "Designated target (Test area)",
+              "Designated target (Test area)"
+            ]
+          },
+          {
+            "progress": 0,
+            "required": 1,
+            "targets": [
+              "Designated target (Test area)",
+              "Designated target (Test area)"
+            ]
+          },
+          {
+            "progress": 0,
+            "required": 1,
+            "targets": [
+              "Designated target (Test area)",
+              "Designated target (Test area)"
+            ]
+          }
+        ],
+        "personal_required": 11
+      }
+    },
+    "quartermaster": {
+      "ready": true,
+      "choices": [
+        {
+          "id": "field-map",
+          "name": "Abanasinia field map",
+          "details": "15 gold; clan level 2; character level 1; Favor 100. All classes; carried reference, no proficiency",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "field-map",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 15,
+          "budget": "Existing readable map; no stats, spells or activation."
+        },
+        {
+          "id": "field-knife",
+          "name": "Fishing knife",
+          "details": "140 gold; clan level 7; character level 1; Favor 500. Dagger/knife proficiency; normal weapon checks",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "field-knife",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 140,
+          "budget": "Unenchanted 1d4 knife; no ability bonuses or activated spells."
+        },
+        {
+          "id": "staff-commission",
+          "name": "Vallenwood staff commission",
+          "details": "300 gold; clan level 8; character level 1; Favor 1500. Quarterstaff; simple weapon users",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "staff-commission",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 300,
+          "budget": "Unenchanted 1d6 quarterstaff; no ability bonuses or activated spells."
+        },
+        {
+          "id": "sword-commission",
+          "name": "Copper longsword commission",
+          "details": "1470 gold; clan level 8; character level 1; Favor 1500. Longsword; martial weapon users",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "sword-commission",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 1470,
+          "budget": "Unenchanted 1d8 longsword; no ability bonuses or activated spells."
+        },
+        {
+          "id": "bow-commission",
+          "name": "Longbow commission",
+          "details": "30 gold; clan level 8; character level 5; Favor 1500. Longbow; ranged weapon users; ammunition separate",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "bow-commission",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 30,
+          "budget": "Unenchanted 1d9 longbow; no ability bonuses or activated spells."
+        },
+        {
+          "id": "hide-commission",
+          "name": "Hide tunic commission",
+          "details": "90 gold; clan level 8; character level 1; Favor 1500. Light armor; normal armor proficiency and casting restrictions",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "hide-commission",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 90,
+          "budget": "Existing hide tunic armor value 3; no ability bonuses or activated spells."
+        },
+        {
+          "id": "shield-commission",
+          "name": "Oaken shield commission",
+          "details": "1440 gold; clan level 8; character level 1; Favor 1500. Shield users; normal shield and casting restrictions",
+          "actions": [
+            {
+              "kind": "quartermaster_buy",
+              "label": "Preview purchase",
+              "id": "shield-commission",
+              "enabled": true,
+              "reasons": []
+            }
+          ],
+          "price_gold": 1440,
+          "budget": "Existing shield armor value 4; no ability bonuses or activated spells."
+        }
+      ],
+      "actions": [
+        {
+          "kind": "quartermaster_list",
+          "label": "List in text",
+          "id": "",
+          "enabled": true,
+          "reasons": []
+        },
+        {
+          "kind": "clan_status",
+          "label": "Retry recovery / check status",
+          "id": "",
+          "enabled": true,
+          "reasons": []
+        }
+      ],
+      "reasons": [],
+      "notes": [
+        "Fixed gold prices; Favor is an eligibility requirement and is never spent. Purchases bind to you, have no resale value, and remain usable after departure under normal item rules."
+      ],
+      "purchase_pending": false,
+      "preview": {
+        "summary": "Buy Abanasinia field map for 15 gold. Favor is not spent.",
+        "expires_at": 2200000061,
+        "actions": [
+          {
+            "kind": "quartermaster_confirm",
+            "label": "Confirm purchase",
+            "id": "field-map",
+            "enabled": true,
+            "reasons": [],
+            "token": "22222222222222222222222222222222"
+          }
+        ]
+      }
+    },
+    "weekly_xp_eighths": 0,
+    "weekly_influence_eighths": 0,
+    "notes": [
+      "Clan weekly incoming XP: 0.000; full rate through 6000 XP, quarter rate through 12000 XP. Weekly Influence: 0.000 / 5000; stored maximum 20000 Influence.",
+      "Account XP and Favor caps are shown above. Reaching a cap may produce reduced or zero credit; it never makes repeat claims unlimited. Commands recheck current eligibility and exact credit."
+    ]
+  }
+}

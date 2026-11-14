@@ -96,6 +96,8 @@ export interface MudState {
   group?: MudValue
   characterCreation?: MudValue
   roomContents?: MudValue
+  clanProgressReceivedAt?: number
+  clanProgress?: MudValue
   ammoStatus?: MudValue
   roomQuests?: MudValue
   questAccepted?: MudValue
@@ -169,6 +171,7 @@ export const defaultMsdpVariables = {
   group: 'GROUP',
   characterCreation: 'CHARACTER_CREATION',
   roomContents: 'ROOM_CONTENTS',
+  clanProgress: 'CLAN_PROGRESS',
   ammoStatus: 'AMMO_STATUS',
   roomQuests: 'ROOM_QUESTS',
   questAccepted: 'QUEST_ACCEPTED',
@@ -299,6 +302,7 @@ export function normalizeMsdpVariableMap(value: unknown): MsdpVariableMap {
     group: normalizeMsdpVariableValue(raw.group, defaultMsdpVariables.group),
     characterCreation: normalizeMsdpVariableValue(raw.characterCreation, defaultMsdpVariables.characterCreation),
     roomContents: normalizeMsdpVariableValue(raw.roomContents, defaultMsdpVariables.roomContents),
+    clanProgress: normalizeMsdpVariableValue(raw.clanProgress, defaultMsdpVariables.clanProgress),
     ammoStatus: normalizeMsdpVariableValue(raw.ammoStatus, defaultMsdpVariables.ammoStatus),
     roomQuests: normalizeMsdpVariableValue(raw.roomQuests, defaultMsdpVariables.roomQuests),
     questAccepted: normalizeMsdpVariableValue(raw.questAccepted, defaultMsdpVariables.questAccepted),
@@ -385,6 +389,7 @@ export type ClientMessage =
     }
 
 export type ServerMessage =
+  | { type: 'heartbeat' }
   | {
       type: 'connection-status'
       status: ConnectionStatus
