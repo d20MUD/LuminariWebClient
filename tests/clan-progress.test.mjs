@@ -170,3 +170,13 @@ test('service review sends the server-issued confirmation identity through the c
   assert.equal(button(render(false)).props.disabled, true)
   ctx.useState = React.useState
 })
+
+
+test('a new report ahead of the last UI clock tick does not flash the stale warning', () => {
+  const render = (receivedAt) => renderToStaticMarkup(React.createElement(ctx.ClanPanel, {
+    value: report, connected: true, receivedAt, onAction() {},
+  }))
+  assert.doesNotMatch(render(Date.now() + 1000), /Actions are paused/)
+  assert.match(render(Date.now() - 11000), /Actions are paused/)
+  assert.match(render(0), /Actions are paused/)
+})

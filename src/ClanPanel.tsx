@@ -19,7 +19,9 @@ export function ClanPanel({ value, connected, receivedAt = 0, onAction }: { valu
   if (!connected) return <p className="clan-status">Connect to view current clan progression.</p>
   if (!view) return <p className="clan-status">Waiting for a supported clan report.</p>
   if (view.status !== 'ready') return <p className="clan-status" role="status">{clanPlainText(view.reason)}</p>
-  return <ClanDetails key={`${view.character_id}:${view.clan.uid}`} view={view} fresh={now - receivedAt < 10000 && now >= receivedAt} onAction={onAction} />
+  // A report can arrive between clock ticks; it is new, not stale.
+  const fresh = receivedAt > 0 && Math.max(0, now - receivedAt) < 10000
+  return <ClanDetails key={`${view.character_id}:${view.clan.uid}`} view={view} fresh={fresh} onAction={onAction} />
 }
 
 function ClanDetails({ view, fresh, onAction }: { view: ClanReady; fresh: boolean; onAction: (command: string) => void }) {

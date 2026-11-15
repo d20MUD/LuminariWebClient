@@ -3633,7 +3633,7 @@ function App() {
         </div>
       ) : null}
 
-      {selectedMudId === 'krynn' && isCreationOpen ? <WebOutputModal title="Create your Krynn character" titleId="character-creation-title" closeLabel="Minimize character creation"
+      {selectedMudId === 'krynn' && isCreationOpen ? <WebOutputModal title="Create your Krynn character" titleId="character-creation-title" closeLabel="Minimize character creation" hideCloseButton
         className={`character-creation-modal${creationStep?.step === 'race' || creationStep?.step === 'class' ? ' character-creation-modal-grid' : ''}`} onClose={() => { setIsCreationOpen(false); creationOpenRef.current = false }}>
         {creationStep ? <CharacterCreationPanel key={creationStep.id} creation={creationStep} onRespond={sendInputLine} onEdit={(action, text) => sendMessage({ type: 'creation-editor', action, text })} renderText={renderWebTextBlocks} renderInfo={renderCreationInfo} />
           : <div className="creation-waiting"><p role="status">{status === 'error' ? statusDetail : 'Signing in to your account…'}</p><p>The name step will appear once the account is authenticated.</p>
@@ -5886,8 +5886,8 @@ function QuestHistoryBrowser({ value, modalEnabled, onRequest }: { value?: MudVa
   </>
 }
 
-function WebOutputModal({ title, titleId, closeLabel, className = '', onClose, children }: {
-  title: ReactNode; titleId: string; closeLabel: string; className?: string; onClose: () => void; children: ReactNode
+function WebOutputModal({ title, titleId, closeLabel, className = '', hideCloseButton = false, onClose, children }: {
+  title: ReactNode; titleId: string; closeLabel: string; className?: string; hideCloseButton?: boolean; onClose: () => void; children: ReactNode
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -5914,7 +5914,7 @@ function WebOutputModal({ title, titleId, closeLabel, className = '', onClose, c
     >
       <header className="quest-details-header">
         <h2 id={titleId}>{title}</h2>
-        <button type="button" onClick={onClose} aria-label={closeLabel} autoFocus>Close</button>
+        {!hideCloseButton ? <button type="button" onClick={onClose} aria-label={closeLabel} autoFocus>Close</button> : null}
       </header>
       {children}
     </dialog>

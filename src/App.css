@@ -2376,3 +2376,59 @@
 .clan-buff-active > summary small { color: var(--accent); opacity: 1; }
 .clan-buff-details { padding: 0 0 .5rem; }
 .clan-buff-details p { margin: .35rem 0; }
+
+.creation-background-info { max-width: 65rem; }
+.creation-background-info h3 { text-transform: capitalize; margin: 0 0 .75rem; color: var(--accent); font-size: 1.2rem; }
+.creation-background-description { line-height: 1.65; }
+.creation-background-benefits { display: grid; grid-template-columns: minmax(12rem, 1fr) minmax(0, 2fr); gap: 1rem; margin: 1rem 0; }
+.creation-background-benefits > section { min-width: 0; padding: .85rem 1rem; border: 1px solid var(--border); border-radius: .65rem; background: rgba(var(--surface-rgb), .3); line-height: 1.6; }
+.creation-background-benefits h4 { margin: 0 0 .5rem; font-size: .95rem; }
+.creation-background-benefits ul { margin: 0; padding-left: 1.2rem; }
+.creation-background-confirm { margin: 1rem 0 0; font-weight: 600; }
+@media (max-width: 640px) { .creation-background-benefits { grid-template-columns: minmax(0, 1fr); } }
+
+.creation-field-guidance { max-width: 65rem; margin: 0 0 1rem; padding: .8rem 1rem; border-left: 3px solid var(--accent); background: rgba(var(--surface-rgb), .25); border-radius: .35rem; line-height: 1.6; }
+.creation-field-guidance p { margin: 0 0 .45rem; }
+.creation-field-guidance p:last-child { margin-bottom: 0; }
+.creation-field-guidance strong { font-size: .85rem; color: var(--muted); }
+.creation-field-guidance ul { margin: .25rem 0 0; padding-left: 1.25rem; }
+.creation-choice-feedback { padding: .65rem .85rem; border: 1px solid var(--accent); border-radius: .4rem; }
+
+.creation-choice-list.creation-homeland-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .6rem; max-width: 65rem; }
+.creation-homeland-choices button { min-width: 0; text-align: left; white-space: normal; }
+.creation-homeland-choices .creation-previous { grid-column: 1 / -1; justify-self: start; }
+.creation-homeland-info { max-width: 65rem; line-height: 1.65; margin-bottom: 1rem; }
+.creation-homeland-info h3 { margin: 0 0 .5rem; color: var(--accent); }
+
+.creation-faction-options { max-width: 65rem; }
+.creation-faction-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr)); gap: .75rem; }
+.character-creation-modal button.creation-faction-card { display: flex; flex-direction: column; align-items: flex-start; justify-content: space-between; gap: 1rem; min-height: 6rem; padding: 1rem; text-align: left; white-space: normal; border: 1px solid var(--border); border-radius: .65rem; background: rgba(var(--surface-rgb), .3); }
+.creation-faction-card strong { font-size: 1rem; }
+.creation-faction-card > span { color: var(--muted); font-size: .8rem; }
+.creation-faction-card:hover, .creation-faction-card:focus-visible { border-color: var(--accent); }
+.creation-faction-modal { width: min(42rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem); box-sizing: border-box; overflow-y: auto; padding: 1.25rem; }
+.creation-faction-modal::backdrop { background: rgba(0, 0, 0, .72); }
+.creation-faction-modal h2 { margin: 0 0 1rem; font-size: 1.2rem; }
+.creation-faction-description { line-height: 1.65; overflow-wrap: anywhere; }
+.creation-faction-modal footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .6rem; margin-top: 1.25rem; }
+.creation-faction-modal footer button { white-space: normal; }
+
+.creation-choice-list.creation-detail-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr)); gap: .65rem; max-width: 65rem; }
+.creation-detail-choices button { min-width: 0; text-align: left; white-space: normal; }
+.creation-detail-choices .creation-previous { grid-column: 1 / -1; justify-self: start; }
+.creation-detail-choices .creation-choice-label { display: block; text-transform: capitalize; }
+.creation-choice-alignment { display: block; margin-top: .35rem; color: var(--muted); font-size: .8rem; }
+.creation-deity-info { max-width: 65rem; line-height: 1.65; margin-bottom: 1rem; }
+.creation-deity-info h3 { color: var(--accent); text-transform: capitalize; margin: 0 0 .75rem; }
+.creation-deity-info dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: .4rem 1rem; padding: .85rem 1rem; border: 1px solid var(--border); border-radius: .65rem; }
+.creation-deity-info dt { font-weight: 700; }
+.creation-deity-info dd { margin: 0; overflow-wrap: anywhere; }
+
+.creation-deity-columns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; max-width: 65rem; }
+.creation-deity-column { min-width: 0; }
+.creation-deity-column h3 { margin: 0 0 .5rem; padding-bottom: .4rem; border-bottom: 1px solid var(--border); color: var(--accent); font-size: 1rem; }
+.creation-deity-column button { display: block; width: 100%; margin: 0 0 .45rem; padding: .5rem .65rem; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.creation-deity-column .creation-choice-label { text-transform: capitalize; }
+.creation-deity-column .creation-choice-description { display: block; margin-top: .2rem; font-size: .8rem; line-height: 1.4; color: var(--muted); }
+.creation-deity-pending { grid-column: 1 / -1; }
+@media (max-width: 600px) { .creation-deity-columns { gap: .4rem; } .creation-deity-column button { padding: .45rem .35rem; } }

@@ -286,3 +286,216 @@ test('writing editors preload text and save through the dedicated editor action'
     assert.deepEqual(edits, [['save', 'First line\n/s is literal']])
   }
 })
+
+const backgroundDetails = {
+  name: 'entertainer', description: 'You thrive in front of an audience.',
+  skills: [{ name: 'Acrobatics', bonus: 2 }, { name: 'Perform', bonus: 2 }],
+  ability: 'Gain access to the entertain command, allowing performances for gold.',
+}
+
+test('background confirmation renders structured MSDP details instead of captured terminal output', () => {
+  submitted = false
+  const creation = step({ step: 'confirm', state: 64, body: 'RAW TERMINAL OUTPUT MUST NOT APPEAR', background: backgroundDetails,
+    choices: [{ value: 'y', label: 'Yes' }, { value: 'n', label: 'No' }] })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.match(html, /entertainer background/)
+  assert.match(html, /You thrive in front of an audience/)
+  assert.match(html, /<h4>Skill bonuses<\/h4><ul><li>\+2 to Acrobatics<\/li><li>\+2 to Perform<\/li><\/ul>/)
+  assert.match(html, /<h4>Special ability<\/h4>/)
+  assert.match(html, /Gain access to the entertain command/)
+  assert.doesNotMatch(html, /RAW TERMINAL OUTPUT/)
+  assert.match(html, /Choose this background archetype\?/)
+  assert.match(html, /Yes/); assert.match(html, /No/); assert.match(html, /Previous/)
+})
+
+test('background MSDP validation fails closed and safely escapes field content', () => {
+  for (const background of [undefined, {}, { ...backgroundDetails, skills: [{ name: 'Bad', bonus: '2' }] }]) {
+    const creation = step({ step: 'confirm', state: 64, background, body: '---ENTERTAINER BACKGROUND---\nSkill Bonuses: +2 to Acrobatics\nSpecial Ability: must not parse' })
+    const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+    assert.match(html, /Waiting for background details from the game server/)
+    assert.doesNotMatch(html, /must not parse|ENTERTAINER|Acrobatics/)
+  }
+  const creation = step({ step: 'confirm', state: 64, background: { ...backgroundDetails, name: '<img src=x onerror=evil>' } })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.match(html, /&lt;img/); assert.doesNotMatch(html, /<img/)
+})
+
+test('character detail guidance and examples appear above the editor using MSDP fields', () => {
+  const creation = step({ step: 'editor', state: 70, choices: [], title: 'Ideals', editorText: '',
+    guidance: { description: 'Ideals are beliefs that guide your choices.', examples: ['Freedom: oppose tyranny.', 'Duty: keep your promises.'] } })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.match(html, /About this character detail/)
+  assert.match(html, /Ideals are beliefs that guide your choices/)
+  assert.match(html, /<li>Freedom: oppose tyranny\.<\/li>/)
+  assert.match(html, /<li>Duty: keep your promises\.<\/li>/)
+  assert.ok(html.indexOf('About this character detail') < html.indexOf('<textarea'))
+  assert.equal(step({ guidance: { description: 'Wrong', examples: [123] } }).guidance, undefined)
+})
+
+test('clicking an already selected background displays the server reason without submitting again', () => {
+  const previous = context.useState
+  let feedback = '', commands = []
+  context.useState = (initial) => [typeof initial === 'boolean' ? false : feedback, (value) => { feedback = value }]
+  try {
+    const creation = step({ step: 'options', state: 62, choices: [{ value: '3', label: 'Background archetype', blockedReason: 'You have already chosen a background archetype. Respec to choose another.' }] })
+    const props = { creation, onRespond: (command) => commands.push(command), renderText: (text) => text }
+    const panel = context.CharacterCreationPanel(props)
+    const row = panel.props.children.find((child) => child?.props?.['data-creation-step'] === 'options')
+    const button = row.props.children.flat().find((child) => child?.props?.title?.includes('already chosen'))
+    assert.ok(button)
+    button.props.onClick()
+    assert.deepEqual(commands, [])
+    const html = renderToStaticMarkup(context.CharacterCreationPanel(props))
+    assert.match(html, /role="alert">You have already chosen a background archetype/)
+    assert.doesNotMatch(html, /Waiting for server/)
+  } finally { context.useState = previous }
+})
+
+test('homeland choices come only from MSDP and submit exact region IDs', () => {
+  submitted = false
+  const commands = []
+  const creation = step({ step: 'homeland', state: 51, body: '1) Abanasinia 2) Balifor\n10) Khur 11) Lemish',
+    choices: [{ value: '1', label: 'Abanasinia' }, { value: '4', label: 'Blood Sea Isles' }] })
+  const panel = context.CharacterCreationPanel({ creation, onRespond: (value) => commands.push(value), renderText: (text) => text })
+  const html = renderToStaticMarkup(panel)
+  assert.match(html, /creation-homeland-choices/)
+  assert.doesNotMatch(html, /Balifor|Khur|Lemish|1\) Abanasinia/)
+  const row = panel.props.children.find((child) => child?.props?.['data-creation-step'] === 'homeland')
+  row.props.children.flat().find((child) => Array.isArray(child?.props?.children) && child.props.children.some((label) => label?.props?.children === 'Blood Sea Isles')).props.onClick()
+  assert.deepEqual(commands, ['4'])
+  const empty = step({ step: 'homeland', state: 51, body: '1) Fake parsed choice', choices: [] })
+  const emptyHtml = renderToStaticMarkup(context.CharacterCreationPanel({ creation: empty, onRespond() {}, renderText: (text) => text }))
+  assert.match(emptyHtml, /Waiting for homeland choices/)
+  assert.doesNotMatch(emptyHtml, /Fake parsed choice/)
+})
+
+test('homeland review renders structured history and language with safe confirmation buttons', () => {
+  submitted = false
+  const creation = step({ step: 'confirm', state: 52, body: 'RAW TERMINAL REGION REPORT', choices: [{ value: 'y', label: 'Yes' }, { value: 'n', label: 'No' }],
+    homeland: { name: 'Blood Sea Isles', language: 'Kalinese', description: 'Island history from the game data. <script>evil</script>' } })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.match(html, /Homeland details/); assert.match(html, /Blood Sea Isles/)
+  assert.match(html, /Language: <\/strong>Kalinese/)
+  assert.match(html, /Island history from the game data/)
+  assert.match(html, /Choose this homeland\?/)
+  assert.doesNotMatch(html, /RAW TERMINAL REGION REPORT|<script>/)
+  assert.match(html, /&lt;script&gt;/)
+  assert.equal(step({ homeland: { name: 'Bad', language: 10 } }).homeland, undefined)
+})
+
+test('faction cards open an information modal before submitting the exact server ID', () => {
+  const previous = context.useState
+  const states = []; let index = 0
+  context.useState = (initial) => {
+    const slot = index++
+    if (!(slot in states)) states[slot] = initial
+    return [states[slot], (value) => { states[slot] = value }]
+  }
+  try {
+    const commands = []
+    const creation = step({ step: 'faction', state: 76, body: 'RAW FACTION MENU', choices: [
+      { value: '0', label: 'Adventurer / No faction', description: 'Choose your own allies.' },
+      { value: '17', label: 'Dragonarmies', description: 'Structured faction history. <script>evil</script>' },
+    ] })
+    const props = { creation, onRespond: (value) => commands.push(value), renderText: (text) => text }
+    const render = () => { index = 0; return context.CharacterCreationPanel(props) }
+    let panel = render()
+    const section = panel.props.children.find((child) => child?.props?.['aria-label'] === 'Faction selection')
+    const html = renderToStaticMarkup(panel)
+    assert.match(html, /creation-faction-grid/)
+    assert.match(html, /aria-haspopup="dialog"/)
+    assert.doesNotMatch(html, /Structured faction history|RAW FACTION MENU|<details/)
+    section.props.children[2].props.children[1].props.onClick()
+    assert.deepEqual(commands, [])
+    panel = render()
+    const openedSection = panel.props.children.find((child) => child?.props?.['aria-label'] === 'Faction selection')
+    const modal = openedSection.props.children[3]
+    assert.equal(modal.props.choice.value, '17')
+    const modalHtml = renderToStaticMarkup(modal)
+    assert.match(modalHtml, /<dialog/)
+    assert.match(modalHtml, /Structured faction history/)
+    assert.match(modalHtml, /Back to factions/)
+    assert.match(modalHtml, /Choose Dragonarmies/)
+    assert.match(modalHtml, /&lt;script&gt;/)
+    assert.doesNotMatch(modalHtml, /<script>/)
+    modal.props.onClose()
+    assert.deepEqual(commands, [])
+    const closed = render().props.children.find((child) => child?.props?.['aria-label'] === 'Faction selection')
+    assert.equal(closed.props.children[3], null)
+    closed.props.children[2].props.children[1].props.onClick()
+    const reopened = render().props.children.find((child) => child?.props?.['aria-label'] === 'Faction selection')
+    reopened.props.children[3].props.onChoose()
+    assert.deepEqual(commands, ['17'])
+  } finally { context.useState = previous }
+})
+
+test('missing faction MSDP choices never fall back to parsing the text menu', () => {
+  submitted = false
+  const creation = step({ step: 'faction', state: 76, choices: [], body: '1) Bogus parsed faction' })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  assert.match(html, /Waiting for faction choices from the game server/)
+  assert.doesNotMatch(html, /Bogus parsed faction/)
+})
+
+test('hometown and deity selection use structured MSDP choices and exact IDs', () => {
+  for (const [kind, state, choice] of [
+    ['hometown', 77, { value: '3', label: 'Solace', description: 'A free city with no direct allegiances.' }],
+    ['deity', 78, { value: '12', label: 'Paladine', alignment: 'Lawful Good', alignmentGroup: 'good', description: 'Good dragons, protection' }],
+  ]) {
+    submitted = false
+    const commands = []
+    const creation = step({ step: kind, state, body: 'RAW TERMINAL TABLE\n1) Bogus inferred choice', choices: [choice] })
+    const panel = context.CharacterCreationPanel({ creation, onRespond: (value) => commands.push(value), renderText: (text) => text })
+    const html = renderToStaticMarkup(panel)
+    assert.match(html, kind === 'deity' ? /creation-deity-columns/ : /creation-detail-choices/)
+    assert.ok(html.includes(choice.label) && html.includes(choice.description))
+    if (choice.alignment) assert.match(html, /Lawful Good/)
+    assert.doesNotMatch(html, /RAW TERMINAL TABLE|Bogus inferred choice/)
+    if (kind === 'deity') {
+      const columns = panel.props.children.find((child) => child?.props?.['aria-label'] === 'Deities by alignment')
+      columns.props.children[0][0].props.children[1][0].props.onClick()
+    } else {
+      const row = panel.props.children.find((child) => child?.props?.['data-creation-step'] === kind)
+      row.props.children.flat().filter((child) => child?.props?.onClick).at(-1).props.onClick()
+    }
+    assert.deepEqual(commands, [choice.value])
+    const empty = step({ step: kind, state, choices: [], body: '1) Bogus inferred choice' })
+    const emptyHtml = renderToStaticMarkup(context.CharacterCreationPanel({ creation: empty, onRespond() {}, renderText: (text) => text }))
+    assert.ok(emptyHtml.includes(`Waiting for ${kind} choices from the game server.`))
+    assert.doesNotMatch(emptyHtml, /Bogus inferred choice/)
+  }
+})
+
+test('deity review renders structured faith details safely and never parses the old report', () => {
+  submitted = false
+  const creation = step({ step: 'confirm', state: 79, body: 'RAW DEITY REPORT', choices: [{ value: 'y', label: 'Yes' }, { value: 'n', label: 'No' }],
+    deity: { name: 'Paladine', pantheon: 'Gods of Light', alignment: 'Lawful Good', portfolio: 'Good dragons, protection', description: 'A deity description. <script>evil</script>' } })
+  const html = renderToStaticMarkup(context.CharacterCreationPanel({ creation, onRespond() {}, renderText: (text) => text }))
+  for (const value of ['Deity details', 'Gods of Light', 'Lawful Good', 'Good dragons, protection', 'A deity description.', 'Choose this deity?', 'Yes', 'No', 'Previous']) assert.ok(html.includes(value), value)
+  assert.doesNotMatch(html, /RAW DEITY REPORT|<script>/)
+  assert.match(html, /&lt;script&gt;/)
+  const missing = step({ step: 'confirm', state: 79, deity: { name: 'Bad' }, body: 'RAW DEITY REPORT' })
+  const missingHtml = renderToStaticMarkup(context.CharacterCreationPanel({ creation: missing, onRespond() {}, renderText: (text) => text }))
+  assert.match(missingHtml, /Waiting for deity details from the game server/)
+  assert.doesNotMatch(missingHtml, /RAW DEITY REPORT/)
+})
+
+test('deities use three MSDP alignment groups with alphabetized names and exact selection IDs', () => {
+  submitted = false
+  const commands = []
+  const choices = [
+    { value: '8', label: 'Zivilyn', alignmentGroup: 'neutral' },
+    { value: '2', label: 'Takhisis', alignmentGroup: 'evil' },
+    { value: '4', label: 'Paladine', alignmentGroup: 'good', alignment: 'Misleading display text' },
+    { value: '9', label: 'Gilean', alignmentGroup: 'neutral' },
+  ]
+  const creation = step({ step: 'deity', state: 78, choices })
+  const panel = context.CharacterCreationPanel({ creation, onRespond: (value) => commands.push(value), renderText: (text) => text })
+  const columns = panel.props.children.find((child) => child?.props?.['aria-label'] === 'Deities by alignment').props.children[0]
+  assert.deepEqual(Array.from(columns, (column) => column.props['aria-label']), ['Good deities', 'Neutral deities', 'Evil deities'])
+  const labels = columns.map((column) => column.props.children[1].map((button) => button.props.children[0].props.children))
+  assert.deepEqual(JSON.parse(JSON.stringify(labels)), [['Paladine'], ['Gilean', 'Zivilyn'], ['Takhisis']])
+  columns[2].props.children[1][0].props.onClick()
+  assert.deepEqual(commands, ['2'])
+  assert.equal(step({ choices: [{ value: '1', label: 'Bad', alignmentGroup: 'unknown' }] }).choices[0].alignmentGroup, undefined)
+})

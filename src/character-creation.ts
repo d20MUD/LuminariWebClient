@@ -1,9 +1,10 @@
 import type { MudValue } from '../shared/mud.ts'
 
-export type CreationChoice = { value: string; label: string; description: string; adjustments?: { ability: string; modifier: number }[] }
+export type CreationChoice = { value: string; label: string; description: string; blockedReason?: string; alignment?: string; alignmentGroup?: 'good' | 'neutral' | 'evil'; adjustments?: { ability: string; modifier: number }[] }
+export type CreationBackground = { name: string; description: string; ability: string; skills: { name: string; bonus: number }[] }
 export type CreationStep = {
   id: string; active: boolean; canBack: boolean; step: string; state: number; title: string; name: string;
-  body: string; truncated: boolean; choices: CreationChoice[]; descriptionPreview?: string; editorText?: string; editorMaxBytes?: number; editorBusy?: boolean; editorError?: boolean
+  deity?: { name: string; pantheon: string; alignment: string; portfolio: string; description: string }; homeland?: { name: string; description: string; language: string }; guidance?: { description: string; examples: string[] }; background?: CreationBackground; body: string; truncated: boolean; choices: CreationChoice[]; descriptionPreview?: string; editorText?: string; editorMaxBytes?: number; editorBusy?: boolean; editorError?: boolean
 }
 
 export function parseCreationStep(value: MudValue | undefined): CreationStep | null {
@@ -16,7 +17,7 @@ export function parseCreationStep(value: MudValue | undefined): CreationStep | n
     if (!choice || typeof choice !== 'object') return []
     const item = choice as Record<string, unknown>
     if (typeof item.value !== 'string' || /[\r\n]/.test(item.value) || typeof item.label !== 'string') return []
-    return [{ value: item.value, label: item.label, description: typeof item.description === 'string' ? item.description : '', adjustments: Array.isArray(item.adjustments) ? item.adjustments.flatMap((value) => {
+    return [{ value: item.value, label: item.label, description: typeof item.description === 'string' ? item.description : '', alignment: typeof item.alignment === 'string' ? item.alignment : undefined, alignmentGroup: item.alignmentGroup === 'good' || item.alignmentGroup === 'neutral' || item.alignmentGroup === 'evil' ? item.alignmentGroup : undefined, blockedReason: typeof item.blockedReason === 'string' && item.blockedReason.trim() ? item.blockedReason : undefined, adjustments: Array.isArray(item.adjustments) ? item.adjustments.flatMap((value) => {
       if (!value || typeof value !== 'object') return []
       const adjustment = value as Record<string, unknown>
       return typeof adjustment.ability === 'string' && typeof adjustment.modifier === 'number' && Number.isFinite(adjustment.modifier) ? [{ ability: adjustment.ability, modifier: adjustment.modifier }] : []
@@ -28,6 +29,10 @@ export function parseCreationStep(value: MudValue | undefined): CreationStep | n
     editorMaxBytes: typeof record.editorMaxBytes === 'number' ? record.editorMaxBytes : undefined,
     editorBusy: record.editorBusy === true, editorError: record.editorError === true,
     descriptionPreview: typeof record.descriptionPreview === 'string' ? record.descriptionPreview : undefined,
+    deity: parseCreationDeity(record.deity),
+    homeland: parseCreationHomeland(record.homeland),
+    guidance: parseCreationGuidance(record.guidance),
+    background: parseCreationBackground(record.background),
     body: record.body, truncated: record.truncated === true, choices }
 }
 
@@ -64,4 +69,39 @@ export function creationNameGuidance(body: string): { before: string; criteria: 
     criteria: numbered.map((entry) => entry.match![1]),
     after: lines.slice(numbered.at(-1)!.index + 1).join('\n'),
   }
+}
+
+function parseCreationBackground(value: unknown): CreationBackground | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const details = value as Record<string, unknown>
+  if (typeof details.name !== 'string' || typeof details.description !== 'string' || typeof details.ability !== 'string' || !Array.isArray(details.skills) || details.skills.length !== 2) return undefined
+  const skills: CreationBackground['skills'] = []
+  for (const value of details.skills) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const skill = value as Record<string, unknown>
+    if (typeof skill.name !== 'string' || typeof skill.bonus !== 'number' || !Number.isSafeInteger(skill.bonus)) return undefined
+    skills.push({ name: skill.name, bonus: skill.bonus })
+  }
+  return { name: details.name, description: details.description, ability: details.ability, skills }
+}
+
+function parseCreationGuidance(value: unknown): CreationStep['guidance'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const guidance = value as Record<string, unknown>
+  if (typeof guidance.description !== 'string' || !Array.isArray(guidance.examples) || !guidance.examples.every((item) => typeof item === 'string')) return undefined
+  return { description: guidance.description, examples: guidance.examples }
+}
+
+function parseCreationHomeland(value: unknown): CreationStep['homeland'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const homeland = value as Record<string, unknown>
+  if (typeof homeland.name !== 'string' || typeof homeland.description !== 'string' || typeof homeland.language !== 'string') return undefined
+  return { name: homeland.name, description: homeland.description, language: homeland.language }
+}
+
+function parseCreationDeity(value: unknown): CreationStep['deity'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+  const deity = value as Record<string, unknown>
+  if (typeof deity.name !== 'string' || typeof deity.pantheon !== 'string' || typeof deity.alignment !== 'string' || typeof deity.portfolio !== 'string' || typeof deity.description !== 'string') return undefined
+  return { name: deity.name, pantheon: deity.pantheon, alignment: deity.alignment, portfolio: deity.portfolio, description: deity.description }
 }
