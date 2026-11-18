@@ -6023,7 +6023,7 @@ function KrynnAmmoStatus({ value }: { value: MudValue | undefined }) {
   else if (typeof status.quantity !== 'number' || !Number.isSafeInteger(status.quantity) || status.quantity < 0) return null
   else {
     const name = typeof status.name === 'string' ? status.name : ''
-    text = `${status.preferred === true ? 'Preferred ammo' : 'Ammo'}: ${name ? `${name} — ` : ''}${status.unlimited === true ? 'unlimited' : `${status.quantity.toLocaleString()} remaining`}`
+    text = `${status.fallback === true ? 'Fallback ammo' : status.preferred === true ? 'Preferred ammo' : 'Ammo'}: ${name ? `${name} — ` : ''}${status.unlimited === true ? 'unlimited' : `${status.quantity.toLocaleString()} remaining`}`
   }
   return <p className="krynn-ammo-status" role="status" dangerouslySetInnerHTML={{ __html: renderMudHtml(text) }} />
 }
@@ -6232,6 +6232,10 @@ function reflowModalText(body: string): string {
   // Legacy feat reports contain wrapped field values, not one prose block.
   const startsFeatField = (line: string) => /^(?:Feat|Type|Prerequisites|Description|Prerequisite For|Obtained by Races|Obtained by Class|Class Feat for)\s*:/i.test(plainLine(line))
   const isFeatHelp = lines.some((line) => /^Feat\s*:/i.test(plainLine(line)))
+  // Generated spell/power reports are labelled fields too. Keep each field
+  // on its own line while joining wrapped continuations within its value.
+  const isSpellHelp = lines.some((line) => /^(?:Spell|Power)\s*:/i.test(plainLine(line)))
+  const startsSpellField = (line: string) => /^(?:Spell|Power|School|Classes|Domains|Status|Targets|Recipients|Area|Touch|Augmentation|Description|Damage|Saves|Duration|Notes|Repeated hits|Periodic damage)\s*:/i.test(plainLine(line))
   const isHeading = (line: string) => /:\s*$/.test(plainLine(line))
   let abilityList = false
   let racialAbilities = false
@@ -6249,7 +6253,7 @@ function reflowModalText(body: string): string {
     const trimmed = line.replace(/^[ \t]+|[ \t]+$/g, '')
     const text = racialAbilities ? trimmed.replace(/[ \t]+/g, ' ') : trimmed
     if (index === lines.length - 1) return text
-    return text + (!formattedLines.has(index) && !isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !(isFeatHelp && startsFeatField(lines[index + 1])) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
+    return text + (!formattedLines.has(index) && !isBlank(line) && !isBlank(lines[index + 1]) && !startsListItem(lines[index + 1]) && !(isFeatHelp && startsFeatField(lines[index + 1])) && !(isSpellHelp && startsSpellField(lines[index + 1])) && !isHeading(line) && !/^>/.test(plainLine(lines[index + 1])) && !abilityList ? ' ' : '\n')
   }).join('')
 }
 

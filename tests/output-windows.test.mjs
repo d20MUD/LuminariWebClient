@@ -403,6 +403,8 @@ test('Krynn ammo HUD is text only, colored, and hidden without a ranged weapon',
   assert.match(text, /color:/)
   assert.doesNotMatch(text, /button|<a /)
   assert.match(render({ ...base, preferred: true, quantity: 0 }), /Preferred ammo:.*0 remaining/)
+  assert.match(render({ ...base, fallback: true }), /Fallback ammo:.*steel arrows.*75 remaining/)
+  assert.match(render({ ...base, fallback: true, unlimited: true }), /Fallback ammo:.*unlimited/)
   assert.match(render({ ...base, unlimited: true }), /unlimited/)
   assert.match(render({ ...base, pouch: false }), /no ammo pouch equipped/)
   assert.equal(context.KrynnAmmoStatus({ value: { ...base, quantity: -1 } }), null)

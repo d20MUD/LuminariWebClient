@@ -582,3 +582,35 @@ test('help usage blocks retain command line breaks without stopping prose reflow
   assert.doesNotMatch(html, /<weapon>/)
   assert.equal(context.reflowModalText('  \tRhelp first\tn\n  help second').replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''), 'help first\nhelp second')
 })
+
+
+test('spell help preserves field rows and reflows only wrapped values', () => {
+  const fields = [
+    ['Spell', 'mirror image'], ['School', 'Illusion'],
+    ['Classes', 'Wizard level 3 (circle 2); Sorcerer level 4 (circle 2);\n Bard level 4 (circle 5)'],
+    ['Domains', 'Air (circle 7)'], ['Targets', 'character in the room'],
+    ['Description', 'Creates 4 + min(5, caster level / 3) illusory images.\n A damaging non-spell attack may hit an image instead.'],
+    ['Damage', 'None.'], ['Saves', 'None.'], ['Duration', '300 rounds, or until all images are destroyed.'],
+    ['Notes', 'Does not intercept spell damage.'],
+  ]
+  const input = fields.map(([label, value]) => `\tc${label.padEnd(12)}: \tn${value}`).join('\r\n')
+  const text = context.reflowModalText(input).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+  assert.equal(text.split('\n').length, fields.length)
+  for (const [label] of fields) assert.ok(text.split('\n').some((line) => line.startsWith(label)))
+  assert.match(text, /circle 2\); Bard level 4/)
+  assert.match(text, /illusory images\. A damaging non-spell attack/)
+  const html = renderToStaticMarkup(React.createElement(React.Fragment, null, context.renderWebTextBlocks(input)))
+  assert.match(html, /modal-flow-text/)
+  assert.match(html, /Illusion\n/)
+  assert.match(html, /color:/)
+})
+
+test('power help preserves augmentation and supplemental field boundaries', () => {
+  const input = 'Power: energy ray\nSchool: Psychokinesis\nTargets: one enemy\nTouch: Ranged touch attack\nAugmentation: Spend extra PSP.\n Additional PSP are spent in steps of 1.\nDescription: A ray of energy.\nDamage: 1d6 per PSP.\nRepeated hits: Once per casting.\nPeriodic damage: None.\nSaves: None.\nDuration: Instant.\nNotes: Choose an energy type.'
+  const text = context.reflowModalText(input)
+  assert.match(text, /Power: energy ray\nSchool:/)
+  assert.match(text, /extra PSP\. Additional PSP/)
+  assert.match(text, /casting\.\nPeriodic damage:/)
+  assert.match(text, /Instant\.\nNotes:/)
+  assert.equal(context.reflowModalText('Ordinary help text\nwraps within its paragraph.'), 'Ordinary help text wraps within its paragraph.')
+})
